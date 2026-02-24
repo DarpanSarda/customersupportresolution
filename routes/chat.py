@@ -1,16 +1,18 @@
-from fastapi import FastAPI
+from fastapi import APIRouter
 import uuid
 
 from models.chat import ChatRequest, ChatResponse
 from core.BaseAgent import AgentExecutionContext
-from bootstrap import bootstrap_system   # your bootstrap function
+from services.BootstrapService import bootstrap_system
+from utils.Config import CONFIG
 
-app = FastAPI()
+router = APIRouter()
 
-graph_engine = bootstrap_system()
+container = bootstrap_system(CONFIG)
+graph_engine = container.graph_engine
 
 
-@app.post("/chat", response_model=ChatResponse)
+@router.post("/chat", response_model=ChatResponse)
 def chat_route(request: ChatRequest):
 
     trace_id = str(uuid.uuid4())

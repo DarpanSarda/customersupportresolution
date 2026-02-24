@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from uuid import uuid4
 
 class PatchMetadata(BaseModel):
@@ -9,20 +9,16 @@ class PatchMetadata(BaseModel):
     trace_id: str
     request_id: str
 
-    class Config:
-        extra = "forbid"
-
 class Patch(BaseModel):
     patch_id: str = Field(default_factory=lambda: str(uuid4()))
     agent_name: str
     target_section: str
     confidence: float
     changes: Dict[str, Any]
-    metadata: PatchMetadata
+    metadata: Optional[PatchMetadata] = None
 
     class Config:
         extra = "forbid"
-        allow_mutation = False  # Makes patch immutable
 
     @validator("confidence")
     def validate_confidence(cls, v):

@@ -84,13 +84,16 @@ class BaseAgent(ABC):
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             # Inject mandatory metadata
-            patch.metadata.update({
-                "execution_time_ms": execution_time_ms,
-                "config_version": context.config_version,
-                "prompt_version": context.prompt_version,
-                "trace_id": context.trace_id,
-                "request_id": context.request_id,
-            })
+            from models.patch import PatchMetadata
+
+            metadata = PatchMetadata(
+                execution_time_ms=execution_time_ms,
+                config_version=context.config_version,
+                prompt_version=context.prompt_version,
+                trace_id=context.trace_id,
+                request_id=context.request_id,
+            )
+            patch.metadata = metadata
 
             # Structured logging
             self._log_execution(context, patch)

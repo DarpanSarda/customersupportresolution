@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from routes.chat import router as chat_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -17,6 +17,11 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all HTTP methods
     allow_headers=["*"],  # Allows all headers
 )
+
+
+
+# Register routes
+app.include_router(chat_router)
 
 # Health check endpoint
 @app.get("/health")

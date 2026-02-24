@@ -14,11 +14,11 @@ class LLMFactory:
     }
 
     @classmethod
-    def create(cls, provider: str, **kwargs) -> "LLMManager":
+    def create(cls, provider: str | dict, **kwargs) -> "LLMManager":
         """Create an LLM client instance.
 
         Args:
-            provider: Provider name (groq, openrouter)
+            provider: Provider name (groq, openrouter) or config dict with 'provider' key
             **kwargs: Additional arguments to pass to client constructor
 
         Returns:
@@ -27,11 +27,23 @@ class LLMFactory:
         Raises:
             ValueError: If provider is not registered
         """
-        provider_lower = provider.lower()
+        # Handle dict config
+        if isinstance(provider, dict):
+            provider_name = provider.get("provider")
+            if not provider_name:
+                raise ValueError("Config dict must contain 'provider' key")
+            # Merge dict config with kwargs (kwargs takes precedence)
+            config_kwargs = {k: v for k, v in provider.items() if k != "provider"}
+            config_kwargs.update(kwargs)
+            kwargs = config_kwargs
+        else:
+            provider_name = provider
+
+        provider_lower = provider_name.lower()
 
         if provider_lower not in cls._clients:
             raise ValueError(
-                f"Unknown provider: {provider}. "
+                f"Unknown provider: {provider_name}. "
                 f"Available: {list(cls._clients.keys())}"
             )
 
