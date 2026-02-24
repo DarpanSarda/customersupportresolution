@@ -48,7 +48,7 @@ class GraphEngine:
         self.graph_config = graph_config
         self.orchestrator = orchestrator
 
-    def run(self, request_input: dict, execution_context) -> dict:
+    def run(self, request_input: dict, execution_context, session_id: str = "default") -> dict:
         """Execute the graph from entry/resume node to terminal node.
 
         Args:
@@ -66,6 +66,8 @@ class GraphEngine:
                 - langfuse_handler: Langfuse client (optional)
                 - logger: Structured logger (optional)
 
+            session_id: Session identifier for state isolation (default: "default")
+
         Returns:
             dict: Final state after reaching terminal node
 
@@ -77,7 +79,7 @@ class GraphEngine:
             2️⃣ Graph Execution Loop: Execute agents until terminal
             3️⃣ Lifecycle Updates: Track current node and status via patches
         """
-        state = self.orchestrator.state_manager.current_state
+        state = self.orchestrator.state_manager.get_session_state(session_id)
 
         lifecycle = state.get("lifecycle", {})
 
@@ -101,13 +103,15 @@ class GraphEngine:
             state = self.orchestrator.execute_agent(
                 agent_name=current_node,
                 request_input=request_input,
-                execution_context=execution_context
+                execution_context=execution_context,
+                session_id=session_id
             )
 
             # Terminal check
             if current_node in self.graph_config["terminal_nodes"]:
-                self._update_lifecycle(current_node, "completed")
-                return state
+                self._update_lifecycle(current_node, "completed", session_id)
+                # Return updated state with completed status
+                return self.orchestrator.state_manager.get_session_state(session_id)
 
             # Evaluate next node
             next_node = self._evaluate_edges(current_node, state)
@@ -117,19 +121,20 @@ class GraphEngine:
                     f"No valid transition from {current_node}"
                 )
 
-            self._update_lifecycle(next_node, "active")
+            self._update_lifecycle(next_node, "active", session_id)
             current_node = next_node
 
     # -----------------------------------------------------
     # Lifecycle Update via Patch
     # -----------------------------------------------------
 
-    def _update_lifecycle(self, node: str, status: str) -> None:
+    def _update_lifecycle(self, node: str, status: str, session_id: str = "default") -> None:
         """Update lifecycle section via system patch.
 
         Args:
             node: Current or next node name
             status: "active" or "completed"
+            session_id: Session identifier for isolation
 
         Note:
             Creates a system patch (agent_name="SystemGraphEngine")
@@ -154,11 +159,12 @@ class GraphEngine:
                 "config_version": "system",
                 "prompt_version": "system",
                 "trace_id": "system",
-                "request_id": "system"
+                "request_id": "system",
+                "session_id": session_id
             }
         )
 
-        self.orchestrator.execute_system_patch(patch)
+        self.orchestrator.execute_system_patch(patch, session_id)
 
     # -----------------------------------------------------
     # Edge Evaluation
@@ -178,6 +184,7 @@ class GraphEngine:
             - Finds all edges from current node
             - Checks each edge's condition against state
             - Returns first matching edge's target
+            - Supports wildcard "*" to match any non-null value
         """
         for edge in self.graph_config["edges"]:
 
@@ -192,32 +199,54 @@ class GraphEngine:
 
             actual = self._extract_field(state[section], field_path)
 
-            if actual == expected:
+            # Wildcard match: "*" matches any non-null value
+            if expected == "*":
+                if actual is not None:
+                    return edge["to"]
+            elif actual == expected:
                 return edge["to"]
 
         return None
 
     def _extract_field(self, data: dict, field_path: str):
-        """Extract nested field value using dot notation.
+        """Extract nested field value using dot notation with array indexing.
 
         Args:
             data: Dictionary to extract from (typically a state section)
-            field_path: Dot-separated field path (e.g., "intent.primary")
+            field_path: Dot-separated field path with optional array index
+                Examples: "intent.primary", "tools_called[-1].status"
 
         Returns:
             Field value if path exists, None otherwise
 
         Examples:
             _extract_field({"intent": {"primary": "refund"}}, "intent.primary") -> "refund"
-            _extract_field({"intent": "refund"}, "intent") -> "refund"
-            _extract_field({"intent": {}}, "intent.primary") -> None
+            _extract_field({"tools_called": [{"status": "success"}]}, "tools_called[-1].status") -> "success"
+            _extract_field({"tools_called": []}, "tools_called[-1].status") -> None
         """
-        parts = field_path.split(".")
+        # Remove brackets and split
+        path = field_path.replace("]", "").replace("[", ".")
+        parts = path.split(".")
         value = data
 
         for part in parts:
-            if part not in value:
+            if part == "":
+                continue  # Skip empty parts from double dots
+
+            # Handle negative indices ([-1] for last element)
+            if value is None:
                 return None
-            value = value[part]
+
+            # Check if part is a digit (array index)
+            if part.lstrip("-").isdigit():
+                index = int(part)
+                if isinstance(value, list) and -len(value) <= index < len(value):
+                    value = value[index]
+                else:
+                    return None
+            elif isinstance(value, dict) and part in value:
+                value = value[part]
+            else:
+                return None
 
         return value

@@ -10,8 +10,8 @@ class PromptLoader:
             base_path: Base path to prompts directory. Defaults to project_root/prompts
         """
         if base_path is None:
-            # Get the project root (3 levels up from this file)
-            project_root = Path(__file__).parent.parent.parent
+            # Get the project root (2 levels up from this file)
+            project_root = Path(__file__).parent.parent
             base_path = project_root / "prompts"
         self.base_path = Path(base_path)
 
