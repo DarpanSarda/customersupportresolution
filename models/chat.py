@@ -9,4 +9,4 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     session_id: str
     state_version: int
-    response: dict
+    response: str

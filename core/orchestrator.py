@@ -40,7 +40,8 @@ class Orchestrator:
         agent_registry: Dict,
         config_loader,
         prompt_loader,
-        llm_client
+        llm_client,
+        tool_registry=None
     ):
         """Initialize orchestrator with required components.
 
@@ -52,6 +53,7 @@ class Orchestrator:
             config_loader: Configuration loader
             prompt_loader: Prompt template loader
             llm_client: LLM client instance
+            tool_registry: Tool registry for tool execution agents
         """
         self.state_manager = state_manager
         self.patch_validator = patch_validator
@@ -59,6 +61,7 @@ class Orchestrator:
         self.config_loader = config_loader
         self.prompt_loader = prompt_loader
         self.llm_client = llm_client
+        self.tool_registry = tool_registry
 
     # -----------------------------------------------------
     # MAIN EXECUTION ENTRYPOINT
@@ -68,7 +71,8 @@ class Orchestrator:
         self,
         agent_name: str,
         request_input: Dict,
-        execution_context: AgentExecutionContext
+        execution_context: AgentExecutionContext,
+        session_id: str = "default"
     ) -> Dict:
         """Execute a single agent with full orchestration support.
 
@@ -127,9 +131,9 @@ class Orchestrator:
             raise ValueError(f"Agent {agent_name} has no class defined")
 
         # -------------------------------------------------
-        # 2️⃣ Prepare State
+        # 2️⃣ Prepare State (Session-Isolated)
         # -------------------------------------------------
-        current_state = self.state_manager.current_state
+        current_state = self.state_manager.get_session_state(session_id)
 
         # Inject input into conversation section
         current_state["conversation"]["latest_message"] = request_input.get("message")
@@ -144,11 +148,16 @@ class Orchestrator:
         agent_config_data["config_loader"] = self.config_loader
         agent_config_data["prompt_loader"] = self.prompt_loader
         agent_config_data["llm_client"] = self.llm_client
+        agent_config_data["tool_registry"] = self.tool_registry
 
-        agent_instance = agent_class(
-            config=agent_config_data,
-            prompt=prompt_version
-        )
+        # Special handling for ToolExecutionAgent (no BaseAgent inheritance)
+        if agent_name == "ToolExecutionAgent":
+            agent_instance = agent_class(tool_registry=self.tool_registry)
+        else:
+            agent_instance = agent_class(
+                config=agent_config_data,
+                prompt=prompt_version
+            )
 
         # -------------------------------------------------
         # 4️⃣ Execute Agent With Retry Policy
@@ -175,14 +184,14 @@ class Orchestrator:
                 )
 
                 # -------------------------------------------------
-                # 6️⃣ Apply Patch
+                # 6️⃣ Apply Patch (Session-Isolated)
                 # -------------------------------------------------
-                new_version = self.state_manager.apply_patch(patch)
+                new_version = self.state_manager.apply_patch(patch, session_id=session_id)
 
                 # -------------------------------------------------
                 # 7️⃣ Return Updated Snapshot
                 # -------------------------------------------------
-                return self.state_manager.get_snapshot(new_version)
+                return self.state_manager.get_snapshot(new_version, session_id)
 
             except Exception as e:
                 last_exception = e
@@ -196,11 +205,20 @@ class Orchestrator:
         # Should never reach here
         raise RuntimeError("Unexpected orchestrator failure")
     
-    def execute_system_patch(self, patch: Patch):    
-        current_state = self.state_manager.current_state
+    def execute_system_patch(self, patch: Patch, session_id: str = "default"):
+        """Execute a system-generated patch (e.g., lifecycle updates).
+
+        Args:
+            patch: Validated patch object
+            session_id: Session identifier for isolation
+
+        Returns:
+            dict: Updated state snapshot
+        """
+        current_state = self.state_manager.get_session_state(session_id)
         self.patch_validator.validate(
             patch=patch,
             current_state=current_state
         )
-        new_version = self.state_manager.apply_patch(patch)
-        return self.state_manager.get_snapshot(new_version)
+        new_version = self.state_manager.apply_patch(patch, session_id=session_id)
+        return self.state_manager.get_snapshot(new_version, session_id)

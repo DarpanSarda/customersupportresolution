@@ -22,17 +22,37 @@ def chat_route(request: ChatRequest):
         trace_id=trace_id,
         request_id=request_id,
         tenant_id=request.tenant_id,
+        session_id=request.session_id,
         config_version="v1",
         prompt_version="v1"
     )
 
-    result_state = graph_engine.run(
-        request_input={"message": request.message},
-        execution_context=execution_context
-    )
+    try:
+        result_state = graph_engine.run(
+            request_input={"message": request.message},
+            execution_context=execution_context,
+            session_id=request.session_id
+        )
 
-    return ChatResponse(
-        session_id=request.session_id,
-        state_version=graph_engine.orchestrator.state_manager.current_version,
-        response=result_state.get("understanding", {})
-    )
+        # Extract final_response from execution section
+        execution_section = result_state.get("execution", {})
+        final_response = execution_section.get("final_response", "I apologize, but I couldn't generate a response.")
+
+        # Get session-specific version
+        state_version = graph_engine.orchestrator.state_manager.get_session_version(request.session_id)
+
+        return ChatResponse(
+            session_id=request.session_id,
+            state_version=state_version,
+            response=final_response
+        )
+
+    except Exception:  # Don't leak stack traces to client
+        # Deterministic failure - log error internally in production
+        state_version = graph_engine.orchestrator.state_manager.get_session_version(request.session_id)
+
+        return ChatResponse(
+            session_id=request.session_id,
+            state_version=state_version,
+            response="I apologize, but an internal error occurred. Please try again."
+        )

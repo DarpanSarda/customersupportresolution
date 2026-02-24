@@ -19,6 +19,7 @@ class AgentExecutionContext:
         tenant_id: str,
         config_version: str,
         prompt_version: str,
+        session_id: str = "default",
         otel_span=None,
         langfuse_handler=None,
         logger=None,
@@ -28,6 +29,7 @@ class AgentExecutionContext:
         self.tenant_id = tenant_id
         self.config_version = config_version
         self.prompt_version = prompt_version
+        self.session_id = session_id
         self.otel_span = otel_span
         self.langfuse_handler = langfuse_handler
         self.logger = logger
@@ -92,6 +94,7 @@ class BaseAgent(ABC):
                 prompt_version=context.prompt_version,
                 trace_id=context.trace_id,
                 request_id=context.request_id,
+                session_id=context.session_id,
             )
             patch.metadata = metadata
 

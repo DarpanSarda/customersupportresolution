@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 
 class IntentModel(BaseModel):
     name: str
@@ -22,3 +22,16 @@ class UnderstandingSchema(BaseModel):
 class LifecycleSchema(BaseModel):
     current_node: Optional[str]
     status: Optional[str]
+
+class ToolCallModel(BaseModel):
+    tool_name: str
+    status: str
+    input_payload: dict
+    output_payload: Optional[dict]
+    error: Optional[str]
+
+
+class ExecutionSchema(BaseModel):
+    tools_called: Optional[List[ToolCallModel]] = []
+    final_response: Optional[str] = None
+    response_confidence: Optional[float] = None

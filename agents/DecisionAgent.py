@@ -45,6 +45,10 @@ class DecisionAgent(BaseAgent):
         intent_name = intent_data.get("name")
         confidence = intent_data.get("confidence")
 
+        # Defensive check: confidence must exist
+        if confidence is None:
+            raise ValueError("Confidence missing in understanding section")
+
         # -------------------------------------------------
         # 2️⃣ Get threshold from config
         # -------------------------------------------------
@@ -55,7 +59,14 @@ class DecisionAgent(BaseAgent):
         # 3️⃣ Apply routing rules
         # -------------------------------------------------
 
-        if confidence < threshold:
+        # Check for FAQ intent first - route to tool
+        if intent_name == "FAQ_QUERY":
+            decision = {
+                "action": "CALL_TOOL",
+                "route": "faq_lookup",
+                "reason": "FAQ intent detected - using lookup tool"
+            }
+        elif confidence < threshold:
             decision = {
                 "action": "ESCALATE",
                 "route": "LOW_CONFIDENCE",

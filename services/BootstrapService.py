@@ -6,11 +6,17 @@ from core.PatchValidator import PatchValidator
 from core.orchestrator import Orchestrator
 from core.GraphValidator import GraphValidator
 from core.GraphEngine import GraphEngine
+from core.ToolRegistry import ToolRegistry
 
 from agents.IntentAgent import IntentAgent
 from agents.DecisionAgent import DecisionAgent
+from agents.ResponseAgent import ResponseAgent
+from agents.ToolExecutionAgent import ToolExecutionAgent
+from agents.FallbackAgent import FallbackAgent
 
-from models.sections import UnderstandingSchema, LifecycleSchema
+from tools.FAQLookupTool import FAQLookupTool
+
+from models.sections import UnderstandingSchema, LifecycleSchema, DecisionSchema, ExecutionSchema
 
 
 class SystemContainer:
@@ -18,11 +24,12 @@ class SystemContainer:
     Holds fully wired system components.
     """
 
-    def __init__(self, graph_engine, orchestrator, state_manager, config_loader):
+    def __init__(self, graph_engine, orchestrator, state_manager, config_loader, tool_registry):
         self.graph_engine = graph_engine
         self.orchestrator = orchestrator
         self.state_manager = state_manager
         self.config_loader = config_loader
+        self.tool_registry = tool_registry
 
 
 def bootstrap_system(config: dict) -> SystemContainer:
@@ -48,6 +55,12 @@ def bootstrap_system(config: dict) -> SystemContainer:
     state_manager = StateManager()
 
     # -----------------------------------------------------
+    # 5️⃣ Tool Registry
+    # -----------------------------------------------------
+    tool_registry = ToolRegistry()
+    tool_registry.register(FAQLookupTool())
+
+    # -----------------------------------------------------
     # 5️⃣ Agent Registry
     # -----------------------------------------------------
     agent_registry = {
@@ -62,6 +75,18 @@ def bootstrap_system(config: dict) -> SystemContainer:
         "DecisionAgent": {
             "allowed_section": "decision",
             "class": DecisionAgent
+        },
+        "ToolExecutionAgent": {
+            "allowed_section": "execution",
+            "class": ToolExecutionAgent
+        },
+        "ResponseAgent": {
+            "allowed_section": "execution",
+            "class": ResponseAgent
+        },
+        "FallbackAgent": {
+            "allowed_section": "execution",
+            "class": FallbackAgent
         }
     }
 
@@ -70,6 +95,8 @@ def bootstrap_system(config: dict) -> SystemContainer:
     # -----------------------------------------------------
     section_schemas = {
         "understanding": UnderstandingSchema,
+        "decision": DecisionSchema,
+        "execution": ExecutionSchema,
         "lifecycle": LifecycleSchema
     }
 
@@ -96,7 +123,8 @@ def bootstrap_system(config: dict) -> SystemContainer:
         agent_registry=agent_registry,
         config_loader=config_loader,
         prompt_loader=prompt_loader,
-        llm_client=llm_client
+        llm_client=llm_client,
+        tool_registry=tool_registry
     )
 
     # -----------------------------------------------------
@@ -119,5 +147,6 @@ def bootstrap_system(config: dict) -> SystemContainer:
         graph_engine=graph_engine,
         orchestrator=orchestrator,
         state_manager=state_manager,
-        config_loader=config_loader
+        config_loader=config_loader,
+        tool_registry=tool_registry
     )

@@ -8,6 +8,7 @@ class PatchMetadata(BaseModel):
     prompt_version: str
     trace_id: str
     request_id: str
+    session_id: str = "default"
 
 class Patch(BaseModel):
     patch_id: str = Field(default_factory=lambda: str(uuid4()))
