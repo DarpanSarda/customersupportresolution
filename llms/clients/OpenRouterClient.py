@@ -1,6 +1,7 @@
 """OpenRouter LLM client implementation."""
 
 import os
+import time
 from openai import OpenAI
 from typing import Dict, List
 from models.llm import LLMResponse
@@ -13,11 +14,12 @@ load_dotenv()
 class OpenRouterClient(LLMManager):
     """OpenRouter API client for LLM generation."""
 
-    def __init__(self, model: str = "anthropic/claude-3.5-sonnet"):
+    def __init__(self, model: str = "anthropic/claude-3.5-sonnet", langfuse_handler=None):
         """Initialize OpenRouter client.
 
         Args:
             model: Model name to use
+            langfuse_handler: Unused (kept for compatibility)
         """
         self.api_key = os.getenv("OPENROUTER_API_KEY")
         self.client = OpenAI(
@@ -42,16 +44,19 @@ class OpenRouterClient(LLMManager):
         Returns:
             LLMResponse with content, model, usage, and raw response
         """
+        start_time = time.time()
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens
         )
+        latency_ms = int((time.time() - start_time) * 1000)
 
         return LLMResponse(
             content=response.choices[0].message.content,
             model=response.model,
             usage=response.usage.model_dump() if response.usage else None,
-            raw=response.model_dump() if hasattr(response, 'model_dump') else None
+            raw=response.model_dump() if hasattr(response, 'model_dump') else None,
+            latency_ms=latency_ms
         )

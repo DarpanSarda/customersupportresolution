@@ -7,11 +7,12 @@ from models.patch import Patch
 class DecisionAgent(BaseAgent):
     """Deterministic decision-making agent.
 
-    Applies confidence-based routing rules:
-    - Low confidence: ESCALATE to human
-    - High confidence: GENERATE_RESPONSE via Resolution Agent
+    Applies decision rules in priority order:
+    1. Policy-based escalation (violations → ESCALATE)
+    2. Sentiment-based escalation (ANGRY/FRUSTRATED → ESCALATE)
+    3. Intent-based routing (tool mapping, confidence threshold)
 
-    Config-driven thresholds via config_loader.
+    All thresholds and policies are config-driven.
     """
 
     agent_name = "DecisionAgent"
@@ -23,21 +24,23 @@ class DecisionAgent(BaseAgent):
         # Prompt not used for rule-based agent, but stored for consistency
 
     def _run(self, state: dict, context: AgentExecutionContext) -> Patch:
-        """Apply decision rules based on intent confidence.
+        """Apply decision rules based on policy, sentiment, and intent.
 
         Args:
-            state: Current state with understanding section
+            state: Current state with policy, understanding sections
             context: Execution context (metadata)
 
         Returns:
             Patch: Decision output with action, route, and reason
         """
         # -------------------------------------------------
-        # 1️⃣ Read understanding
+        # 1️⃣ Read policy and understanding
         # -------------------------------------------------
 
+        policy_data = state.get("policy", {})
         understanding = state.get("understanding", {})
         intent_data = understanding.get("intent")
+        sentiment_data = understanding.get("sentiment")
 
         if not intent_data:
             raise ValueError("Understanding section missing intent")
@@ -50,21 +53,75 @@ class DecisionAgent(BaseAgent):
             raise ValueError("Confidence missing in understanding section")
 
         # -------------------------------------------------
-        # 2️⃣ Get threshold from config
+        # 2️⃣ Get thresholds from config
         # -------------------------------------------------
 
         threshold = self.config_loader.get_intent_threshold()
+        escalation_thresholds = self.config_loader.get_sentiment_escalation_thresholds()
 
         # -------------------------------------------------
-        # 3️⃣ Apply routing rules
+        # 3️⃣ Apply policy-based escalation (HIGHEST PRIORITY)
         # -------------------------------------------------
 
-        # Check for FAQ intent first - route to tool
-        if intent_name == "FAQ_QUERY":
+        if policy_data:
+            is_compliant = policy_data.get("compliant", True)
+            violations = policy_data.get("violations", [])
+
+            if not is_compliant and violations:
+                # Check severity for escalation decision
+                has_critical = any(v.get("severity") == "CRITICAL" for v in violations)
+                has_high = any(v.get("severity") == "HIGH" for v in violations)
+
+                if has_critical or has_high:
+                    violation_names = [v.get("policy_name") for v in violations]
+                    return Patch(
+                        agent_name=self.agent_name,
+                        target_section=self.allowed_section,
+                        confidence=1.0,
+                        changes={
+                            "action": "ESCALATE",
+                            "route": "POLICY_VIOLATION",
+                            "reason": f"Policy violation detected: {', '.join(violation_names)}"
+                        }
+                    )
+
+        # -------------------------------------------------
+        # 4️⃣ Apply sentiment-based escalation
+        # -------------------------------------------------
+
+        if sentiment_data and escalation_thresholds:
+            sentiment_label = sentiment_data.get("label")
+            sentiment_confidence = sentiment_data.get("confidence")
+
+            if sentiment_label in escalation_thresholds:
+                threshold_value = escalation_thresholds[sentiment_label]
+                if sentiment_confidence >= threshold_value:
+                    return Patch(
+                        agent_name=self.agent_name,
+                        target_section=self.allowed_section,
+                        confidence=1.0,
+                        changes={
+                            "action": "ESCALATE",
+                            "route": "HIGH_NEGATIVE_SENTIMENT",
+                            "reason": (
+                                f"High {sentiment_label} sentiment detected "
+                                f"({sentiment_confidence:.2f} >= {threshold_value})"
+                            )
+                        }
+                    )
+
+        # -------------------------------------------------
+        # 5️⃣ Apply intent-based routing rules
+        # -------------------------------------------------
+
+        # Check if intent maps to a tool (config-driven)
+        intent_tool_mapping = self.config_loader.get_intent_tool_mapping()
+        if intent_name in intent_tool_mapping:
+            tool_name = intent_tool_mapping[intent_name]
             decision = {
                 "action": "CALL_TOOL",
-                "route": "faq_lookup",
-                "reason": "FAQ intent detected - using lookup tool"
+                "route": tool_name,
+                "reason": f"Intent '{intent_name}' mapped to tool '{tool_name}'"
             }
         elif confidence < threshold:
             decision = {
@@ -80,7 +137,7 @@ class DecisionAgent(BaseAgent):
             }
 
         # -------------------------------------------------
-        # 4️⃣ Return Patch (metadata injected by BaseAgent.execute)
+        # 6️⃣ Return Patch (metadata injected by BaseAgent.execute)
         # -------------------------------------------------
 
         return Patch(

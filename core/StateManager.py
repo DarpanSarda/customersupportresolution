@@ -20,6 +20,7 @@ class StateManager:
         - conversation: User messages, responses, history
         - context: Current execution context (user_profile, channel)
         - understanding: Intent, sentiment, entities (Tier 1 output)
+        - policy: Policy compliance, violations, restrictions (Tier 2 output)
         - decision: Policy decisions, reasoning (Tier 2 output)
         - execution: Tool execution results, action statuses
         - memory: Long-term conversation memory, summaries
@@ -56,6 +57,7 @@ class StateManager:
             "conversation": {},
             "context": {},
             "understanding": {},
+            "policy": {},
             "decision": {},
             "execution": {},
             "memory": {},

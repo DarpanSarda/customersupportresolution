@@ -1,6 +1,7 @@
 """Groq LLM client implementation."""
 
 import os
+import time
 from groq import Groq
 from typing import Dict, List
 from models.llm import LLMResponse
@@ -9,15 +10,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class GroqClient(LLMManager):
     """Groq API client for LLM generation."""
 
-    def __init__(self, model: str = "openai/gpt-oss-120b"):
+    def __init__(self, model: str = "openai/gpt-oss-120b", langfuse_handler=None):
         """Initialize Groq client.
 
         Args:
-            api_key: Groq API key (defaults to GROQ_API_KEY env var)
             model: Model name to use
+            langfuse_handler: Unused (kept for compatibility)
         """
         self.api_key = os.getenv("GROQ_API_KEY")
         self.client = Groq(api_key=self.api_key)
@@ -39,16 +41,19 @@ class GroqClient(LLMManager):
         Returns:
             LLMResponse with content, model, usage, and raw response
         """
+        start_time = time.time()
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens
         )
+        latency_ms = int((time.time() - start_time) * 1000)
 
         return LLMResponse(
             content=response.choices[0].message.content,
             model=response.model,
             usage=response.usage.model_dump() if response.usage else None,
-            raw=response.model_dump() if hasattr(response, 'model_dump') else None
+            raw=response.model_dump() if hasattr(response, 'model_dump') else None,
+            latency_ms=latency_ms
         )

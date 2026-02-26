@@ -24,7 +24,8 @@ def chat_route(request: ChatRequest):
         tenant_id=request.tenant_id,
         session_id=request.session_id,
         config_version="v1",
-        prompt_version="v1"
+        prompt_version="v1",
+        logger=container.logger
     )
 
     try:
@@ -47,7 +48,16 @@ def chat_route(request: ChatRequest):
             response=final_response
         )
 
-    except Exception:  # Don't leak stack traces to client
+    except Exception as e:
+        # Log error
+        if container.logger:
+            container.logger.error(
+                {"event": "chat_request_failed", "message": request.message},
+                exception=e,
+                trace_id=trace_id,
+                request_id=request_id
+            )
+
         # Deterministic failure - log error internally in production
         state_version = graph_engine.orchestrator.state_manager.get_session_version(request.session_id)
 

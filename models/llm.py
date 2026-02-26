@@ -7,3 +7,4 @@ class LLMResponse(BaseModel):
     model: str
     usage: Optional[dict] = None
     raw: Optional[dict] = None  # For debugging only
+    latency_ms: Optional[int] = None  # Request latency in milliseconds

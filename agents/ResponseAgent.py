@@ -3,11 +3,11 @@ from models.patch import Patch
 
 
 class ResponseAgent(BaseAgent):
-    """Generates final user response based on decision.
+    """Generates final user response based on decision and sentiment.
 
     Routes:
-    - ESCALATE: Returns human handoff message
-    - GENERATE_RESPONSE: Uses LLM to generate contextual response
+    - ESCALATE: Returns human handoff message (tailored based on sentiment)
+    - GENERATE_RESPONSE: Uses LLM to generate contextual response with sentiment awareness
     """
 
     agent_name = "ResponseAgent"
@@ -75,7 +75,27 @@ class ResponseAgent(BaseAgent):
             )
 
         # -------------------------------------------------
-        # 2️⃣ Read decision
+        # 2️⃣ Check for policy restrictions (priority override)
+        # -------------------------------------------------
+        policy = state.get("policy", {})
+        restrictions = policy.get("restrictions", [])
+        is_compliant = policy.get("compliant", True)
+
+        # If policy has restrictions and is not compliant, use restricted response
+        if restrictions and not is_compliant:
+            final_response = restrictions[0]  # Use first restriction as response
+            return Patch(
+                agent_name=self.agent_name,
+                target_section=self.allowed_section,
+                confidence=1.0,
+                changes={
+                    "final_response": final_response,
+                    "response_confidence": 1.0
+                }
+            )
+
+        # -------------------------------------------------
+        # 3️⃣ Read decision
         # -------------------------------------------------
         decision = state.get("decision")
 
@@ -89,7 +109,7 @@ class ResponseAgent(BaseAgent):
             raise ValueError("Decision section missing action")
 
         # -------------------------------------------------
-        # 3️⃣ Handle ESCALATE
+        # 4️⃣ Handle ESCALATE
         # -------------------------------------------------
         if action == "ESCALATE":
             final_response = (
@@ -99,12 +119,21 @@ class ResponseAgent(BaseAgent):
             response_confidence = 1.0
 
         # -------------------------------------------------
-        # 4️⃣ Handle GENERATE_RESPONSE
+        # 5️⃣ Handle GENERATE_RESPONSE
         # -------------------------------------------------
         elif action == "GENERATE_RESPONSE":
             understanding = state.get("understanding", {})
             intent = understanding.get("intent", {}).get("name")
+            sentiment = understanding.get("sentiment", {})
             user_message = understanding.get("input", {}).get("raw_text")
+
+            # Extract sentiment details (with defaults)
+            sentiment_label = sentiment.get("label", "NEUTRAL")
+            sentiment_intensity = sentiment.get("intensity", 0.5)
+
+            # Get sentiment response guidelines from config
+            sentiment_guidelines = self.config_loader.get_sentiment_response_guidelines()
+            sentiment_guideline = sentiment_guidelines.get(sentiment_label, "Be helpful and professional")
 
             # Load response prompt
             template = self.prompt_loader.load(
@@ -116,6 +145,9 @@ class ResponseAgent(BaseAgent):
                 template=template,
                 variables={
                     "intent_name": intent,
+                    "sentiment_label": sentiment_label,
+                    "sentiment_intensity": sentiment_intensity,
+                    "sentiment_guideline": sentiment_guideline,
                     "user_message": user_message
                 }
             )
@@ -132,7 +164,7 @@ class ResponseAgent(BaseAgent):
             raise ValueError(f"Unknown decision action: {action}")
 
         # -------------------------------------------------
-        # 5️⃣ Return Patch (metadata injected by BaseAgent.execute)
+        # 6️⃣ Return Patch (metadata injected by BaseAgent.execute)
         # -------------------------------------------------
         return Patch(
             agent_name=self.agent_name,

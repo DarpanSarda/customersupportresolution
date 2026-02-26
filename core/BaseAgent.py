@@ -3,7 +3,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from models.patch import Patch
-from contextlib import contextmanager
 import time
 
 
@@ -20,8 +19,6 @@ class AgentExecutionContext:
         config_version: str,
         prompt_version: str,
         session_id: str = "default",
-        otel_span=None,
-        langfuse_handler=None,
         logger=None,
     ):
         self.trace_id = trace_id
@@ -30,8 +27,6 @@ class AgentExecutionContext:
         self.config_version = config_version
         self.prompt_version = prompt_version
         self.session_id = session_id
-        self.otel_span = otel_span
-        self.langfuse_handler = langfuse_handler
         self.logger = logger
 
 
@@ -44,7 +39,6 @@ class BaseAgent(ABC):
     - Patch-only return
     - Section ownership enforcement
     - Confidence validation
-    - Observability hook points
     - Prompt + Config version tracking
     """
 
@@ -72,36 +66,34 @@ class BaseAgent(ABC):
 
         start_time = time.time()
 
-        with self._start_observability_span(context):
+        patch = self._run(state, context)
 
-            patch = self._run(state, context)
-
-            if not isinstance(patch, Patch):
-                raise TypeError(
-                    f"{self.agent_name} must return Patch object"
-                )
-
-            self._validate_patch_integrity(patch)
-
-            execution_time_ms = int((time.time() - start_time) * 1000)
-
-            # Inject mandatory metadata
-            from models.patch import PatchMetadata
-
-            metadata = PatchMetadata(
-                execution_time_ms=execution_time_ms,
-                config_version=context.config_version,
-                prompt_version=context.prompt_version,
-                trace_id=context.trace_id,
-                request_id=context.request_id,
-                session_id=context.session_id,
+        if not isinstance(patch, Patch):
+            raise TypeError(
+                f"{self.agent_name} must return Patch object"
             )
-            patch.metadata = metadata
 
-            # Structured logging
-            self._log_execution(context, patch)
+        self._validate_patch_integrity(patch)
 
-            return patch
+        execution_time_ms = int((time.time() - start_time) * 1000)
+
+        # Inject mandatory metadata
+        from models.patch import PatchMetadata
+
+        metadata = PatchMetadata(
+            execution_time_ms=execution_time_ms,
+            config_version=context.config_version,
+            prompt_version=context.prompt_version,
+            trace_id=context.trace_id,
+            request_id=context.request_id,
+            session_id=context.session_id,
+        )
+        patch.metadata = metadata
+
+        # Structured logging
+        self._log_execution(context, patch)
+
+        return patch
 
     # -----------------------------------------------------
     # ABSTRACT BUSINESS LOGIC
@@ -152,46 +144,6 @@ class BaseAgent(ABC):
             raise TypeError("State must be dictionary")
 
     # -----------------------------------------------------
-    # OBSERVABILITY HOOKS
-    # -----------------------------------------------------
-
-    @contextmanager
-    def _start_observability_span(self, context: AgentExecutionContext):
-        """
-        Wrap execution with OpenTelemetry + Langfuse.
-        """
-
-        span = None
-
-        if context.otel_span:
-            span = context.otel_span.start_as_current_span(
-                f"agent:{self.agent_name}"
-            )
-
-        try:
-            if span:
-                span.__enter__()
-
-            # Langfuse trace hook
-            if context.langfuse_handler:
-                context.langfuse_handler.start_trace(
-                    name=self.agent_name,
-                    metadata={
-                        "tenant_id": context.tenant_id,
-                        "trace_id": context.trace_id,
-                    }
-                )
-
-            yield
-
-        finally:
-            if context.langfuse_handler:
-                context.langfuse_handler.end_trace()
-
-            if span:
-                span.__exit__(None, None, None)
-
-    # -----------------------------------------------------
     # LOGGING
     # -----------------------------------------------------
 
@@ -200,6 +152,18 @@ class BaseAgent(ABC):
         context: AgentExecutionContext,
         patch: Patch
     ):
+        import json
+
+        # Print patch details to console
+        print(f"\n{'='*60}")
+        print(f"AGENT: {self.agent_name}")
+        print(f"{'='*60}")
+        print(f"Target Section: {patch.target_section}")
+        print(f"Confidence: {patch.confidence}")
+        print(f"Changes:")
+        print(json.dumps(patch.changes, indent=2))
+        print(f"{'='*60}\n")
+
         if context.logger:
             context.logger.info({
                 "event": "agent_execution",

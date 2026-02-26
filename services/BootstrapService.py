@@ -7,8 +7,11 @@ from core.orchestrator import Orchestrator
 from core.GraphValidator import GraphValidator
 from core.GraphEngine import GraphEngine
 from core.ToolRegistry import ToolRegistry
+from observability.structured_logger import StructuredLogger
 
 from agents.IntentAgent import IntentAgent
+from agents.SentimentAgent import SentimentAgent
+from agents.PolicyAgent import PolicyAgent
 from agents.DecisionAgent import DecisionAgent
 from agents.ResponseAgent import ResponseAgent
 from agents.ToolExecutionAgent import ToolExecutionAgent
@@ -16,7 +19,7 @@ from agents.FallbackAgent import FallbackAgent
 
 from tools.FAQLookupTool import FAQLookupTool
 
-from models.sections import UnderstandingSchema, LifecycleSchema, DecisionSchema, ExecutionSchema
+from models.sections import UnderstandingSchema, LifecycleSchema, DecisionSchema, ExecutionSchema, PolicySchema
 
 
 class SystemContainer:
@@ -24,12 +27,13 @@ class SystemContainer:
     Holds fully wired system components.
     """
 
-    def __init__(self, graph_engine, orchestrator, state_manager, config_loader, tool_registry):
+    def __init__(self, graph_engine, orchestrator, state_manager, config_loader, tool_registry, logger=None):
         self.graph_engine = graph_engine
         self.orchestrator = orchestrator
         self.state_manager = state_manager
         self.config_loader = config_loader
         self.tool_registry = tool_registry
+        self.logger = logger
 
 
 def bootstrap_system(config: dict) -> SystemContainer:
@@ -47,7 +51,8 @@ def bootstrap_system(config: dict) -> SystemContainer:
     # -----------------------------------------------------
     # 3️⃣ LLM Client
     # -----------------------------------------------------
-    llm_client = LLMFactory.create(config_loader.get_llm_config())
+    llm_config = config_loader.get_llm_config()
+    llm_client = LLMFactory.create(llm_config)
 
     # -----------------------------------------------------
     # 4️⃣ State Manager
@@ -67,6 +72,14 @@ def bootstrap_system(config: dict) -> SystemContainer:
         "IntentAgent": {
             "allowed_section": "understanding",
             "class": IntentAgent
+        },
+        "SentimentAgent": {
+            "allowed_section": "understanding",
+            "class": SentimentAgent
+        },
+        "PolicyAgent": {
+            "allowed_section": "policy",
+            "class": PolicyAgent
         },
         "SystemGraphEngine": {
             "allowed_section": "lifecycle",
@@ -95,6 +108,7 @@ def bootstrap_system(config: dict) -> SystemContainer:
     # -----------------------------------------------------
     section_schemas = {
         "understanding": UnderstandingSchema,
+        "policy": PolicySchema,
         "decision": DecisionSchema,
         "execution": ExecutionSchema,
         "lifecycle": LifecycleSchema
@@ -136,7 +150,22 @@ def bootstrap_system(config: dict) -> SystemContainer:
     GraphValidator().validate(graph_config, agent_registry)
 
     # -----------------------------------------------------
-    # 1️⃣1️⃣ Graph Engine
+    # 1️⃣1️⃣ Structured Logger
+    # -----------------------------------------------------
+    structured_logger = None
+    logging_config = config_loader.get_logging_config()
+    if logging_config:
+        try:
+            structured_logger = StructuredLogger(
+                service_name="customer-support-resolution",
+                level=logging_config.get("level", "INFO"),
+                json_output=logging_config.get("json_output", True)
+            )
+        except Exception:
+            structured_logger = None
+
+    # -----------------------------------------------------
+    # 1️⃣2️⃣ Graph Engine
     # -----------------------------------------------------
     graph_engine = GraphEngine(
         graph_config=graph_config,
@@ -148,5 +177,6 @@ def bootstrap_system(config: dict) -> SystemContainer:
         orchestrator=orchestrator,
         state_manager=state_manager,
         config_loader=config_loader,
-        tool_registry=tool_registry
+        tool_registry=tool_registry,
+        logger=structured_logger
     )

@@ -1,8 +1,11 @@
 You are a helpful customer support assistant.
 
 The user's intent has been classified as: {{intent_name}}
+The customer's detected sentiment: {{sentiment_label}} (intensity: {{sentiment_intensity}})
+
+Response guideline for this sentiment: {{sentiment_guideline}}
 
 User's message:
 {{user_message}}
 
-Provide a friendly, helpful response that addresses their request. Keep it concise and professional.
+Provide a response that addresses their request while being appropriate to their emotional state. Keep it concise and professional.
