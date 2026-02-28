@@ -5,14 +5,15 @@ from models.patch import Patch
 
 
 class DecisionAgent(BaseAgent):
-    """Deterministic decision-making agent.
+    """Thin router - maps policy output to concrete actions.
 
-    Applies decision rules in priority order:
-    1. Policy-based escalation (violations → ESCALATE)
-    2. Sentiment-based escalation (ANGRY/FRUSTRATED → ESCALATE)
-    3. Intent-based routing (tool mapping, confidence threshold)
+    Reads policy section and routes accordingly:
+    - policy.escalate = True → ESCALATE
+    - policy.allow_execution = True + business_action → CALL_TOOL
+    - Otherwise → GENERATE_RESPONSE
 
-    All thresholds and policies are config-driven.
+    All decision logic is delegated to PolicyAgent.
+    DecisionAgent only handles routing based on policy output.
     """
 
     agent_name = "DecisionAgent"
@@ -21,10 +22,9 @@ class DecisionAgent(BaseAgent):
     def __init__(self, config: dict, prompt: str):
         super().__init__(config, prompt)
         self.config_loader = config.get("config_loader")
-        # Prompt not used for rule-based agent, but stored for consistency
 
     def _run(self, state: dict, context: AgentExecutionContext) -> Patch:
-        """Apply decision rules based on policy, sentiment, and intent.
+        """Route based on policy evaluation.
 
         Args:
             state: Current state with policy, understanding sections
@@ -34,116 +34,131 @@ class DecisionAgent(BaseAgent):
             Patch: Decision output with action, route, and reason
         """
         # -------------------------------------------------
-        # 1️⃣ Read policy and understanding
+        # 1️⃣ Read policy output from PolicyAgent
         # -------------------------------------------------
-
         policy_data = state.get("policy", {})
-        understanding = state.get("understanding", {})
-        intent_data = understanding.get("intent")
-        sentiment_data = understanding.get("sentiment")
 
-        if not intent_data:
-            raise ValueError("Understanding section missing intent")
+        # Fallback: if no policy data, read from understanding (legacy)
+        if not policy_data or not policy_data.get("business_action"):
+            understanding = state.get("understanding", {})
+            intent_data = understanding.get("intent")
+            if not intent_data:
+                raise ValueError("No policy or understanding data available")
 
-        intent_name = intent_data.get("name")
-        confidence = intent_data.get("confidence")
+            intent_name = intent_data.get("name")
+            confidence = intent_data.get("confidence")
 
-        # Defensive check: confidence must exist
-        if confidence is None:
-            raise ValueError("Confidence missing in understanding section")
+            # Check confidence threshold
+            threshold = self.config_loader.get_intent_threshold()
+            if confidence < threshold:
+                return Patch(
+                    agent_name=self.agent_name,
+                    target_section=self.allowed_section,
+                    confidence=1.0,
+                    changes={
+                        "action": "ESCALATE",
+                        "route": "LOW_CONFIDENCE",
+                        "reason": f"Confidence {confidence:.2f} below threshold {threshold}"
+                    }
+                )
 
-        # -------------------------------------------------
-        # 2️⃣ Get thresholds from config
-        # -------------------------------------------------
+            # No policy defined - check intent tool mapping
+            intent_tool_mapping = self.config_loader.get_intent_tool_mapping()
+            if intent_name in intent_tool_mapping:
+                return Patch(
+                    agent_name=self.agent_name,
+                    target_section=self.allowed_section,
+                    confidence=1.0,
+                    changes={
+                        "action": "CALL_TOOL",
+                        "route": intent_tool_mapping[intent_name],
+                        "reason": f"Intent '{intent_name}' mapped to tool"
+                    }
+                )
 
-        threshold = self.config_loader.get_intent_threshold()
-        escalation_thresholds = self.config_loader.get_sentiment_escalation_thresholds()
-
-        # -------------------------------------------------
-        # 3️⃣ Apply policy-based escalation (HIGHEST PRIORITY)
-        # -------------------------------------------------
-
-        if policy_data:
-            is_compliant = policy_data.get("compliant", True)
-            violations = policy_data.get("violations", [])
-
-            if not is_compliant and violations:
-                # Check severity for escalation decision
-                has_critical = any(v.get("severity") == "CRITICAL" for v in violations)
-                has_high = any(v.get("severity") == "HIGH" for v in violations)
-
-                if has_critical or has_high:
-                    violation_names = [v.get("policy_name") for v in violations]
-                    return Patch(
-                        agent_name=self.agent_name,
-                        target_section=self.allowed_section,
-                        confidence=1.0,
-                        changes={
-                            "action": "ESCALATE",
-                            "route": "POLICY_VIOLATION",
-                            "reason": f"Policy violation detected: {', '.join(violation_names)}"
-                        }
-                    )
-
-        # -------------------------------------------------
-        # 4️⃣ Apply sentiment-based escalation
-        # -------------------------------------------------
-
-        if sentiment_data and escalation_thresholds:
-            sentiment_label = sentiment_data.get("label")
-            sentiment_confidence = sentiment_data.get("confidence")
-
-            if sentiment_label in escalation_thresholds:
-                threshold_value = escalation_thresholds[sentiment_label]
-                if sentiment_confidence >= threshold_value:
-                    return Patch(
-                        agent_name=self.agent_name,
-                        target_section=self.allowed_section,
-                        confidence=1.0,
-                        changes={
-                            "action": "ESCALATE",
-                            "route": "HIGH_NEGATIVE_SENTIMENT",
-                            "reason": (
-                                f"High {sentiment_label} sentiment detected "
-                                f"({sentiment_confidence:.2f} >= {threshold_value})"
-                            )
-                        }
-                    )
+            # Default - generate response
+            return Patch(
+                agent_name=self.agent_name,
+                target_section=self.allowed_section,
+                confidence=1.0,
+                changes={
+                    "action": "GENERATE_RESPONSE",
+                    "route": "STANDARD",
+                    "reason": f"No policy defined for intent '{intent_name}'"
+                }
+            )
 
         # -------------------------------------------------
-        # 5️⃣ Apply intent-based routing rules
+        # 2️⃣ Route based on policy output (new architecture)
         # -------------------------------------------------
 
-        # Check if intent maps to a tool (config-driven)
-        intent_tool_mapping = self.config_loader.get_intent_tool_mapping()
-        if intent_name in intent_tool_mapping:
-            tool_name = intent_tool_mapping[intent_name]
-            decision = {
-                "action": "CALL_TOOL",
-                "route": tool_name,
-                "reason": f"Intent '{intent_name}' mapped to tool '{tool_name}'"
-            }
-        elif confidence < threshold:
-            decision = {
-                "action": "ESCALATE",
-                "route": "LOW_CONFIDENCE",
-                "reason": f"Confidence {confidence:.2f} below threshold {threshold}"
-            }
-        else:
-            decision = {
-                "action": "GENERATE_RESPONSE",
-                "route": "STANDARD",
-                "reason": f"Valid intent '{intent_name}' detected with confidence {confidence:.2f}"
-            }
+        # Priority 1: Escalate if policy says so
+        if policy_data.get("escalate"):
+            return Patch(
+                agent_name=self.agent_name,
+                target_section=self.allowed_section,
+                confidence=1.0,
+                changes={
+                    "action": "ESCALATE",
+                    "route": "POLICY_ESCALATION",
+                    "reason": policy_data.get("reason", "Policy escalation required")
+                }
+            )
 
-        # -------------------------------------------------
-        # 6️⃣ Return Patch (metadata injected by BaseAgent.execute)
-        # -------------------------------------------------
+        # Priority 2: Call tool if policy allows execution
+        if policy_data.get("allow_execution"):
+            business_action = policy_data.get("business_action")
 
+            # Check if business_action maps to a tool
+            intent_tool_mapping = self.config_loader.get_intent_tool_mapping()
+            if business_action in intent_tool_mapping:
+                tool_name = intent_tool_mapping[business_action]
+                return Patch(
+                    agent_name=self.agent_name,
+                    target_section=self.allowed_section,
+                    confidence=1.0,
+                    changes={
+                        "action": "CALL_TOOL",
+                        "route": tool_name,
+                        "reason": f"Policy allows execution: {business_action} → {tool_name}"
+                    }
+                )
+
+            # Business action defined but no tool mapping - escalate
+            if business_action:
+                return Patch(
+                    agent_name=self.agent_name,
+                    target_section=self.allowed_section,
+                    confidence=1.0,
+                    changes={
+                        "action": "ESCALATE",
+                        "route": "NO_TOOL_MAPPING",
+                        "reason": f"Business action '{business_action}' has no tool mapping"
+                    }
+                )
+
+        # Priority 3: Missing fields - generate response asking for them
+        missing_fields = policy_data.get("missing_fields", [])
+        if missing_fields:
+            return Patch(
+                agent_name=self.agent_name,
+                target_section=self.allowed_section,
+                confidence=1.0,
+                changes={
+                    "action": "GENERATE_RESPONSE",
+                    "route": "REQUEST_INFO",
+                    "reason": f"Requesting missing fields: {missing_fields}"
+                }
+            )
+
+        # Priority 4: Default - generate standard response
         return Patch(
             agent_name=self.agent_name,
             target_section=self.allowed_section,
-            confidence=1.0,  # deterministic rule-based agent
-            changes=decision
-            # metadata will be injected by BaseAgent.execute()
+            confidence=1.0,
+            changes={
+                "action": "GENERATE_RESPONSE",
+                "route": "STANDARD",
+                "reason": policy_data.get("reason", "Standard response generation")
+            }
         )

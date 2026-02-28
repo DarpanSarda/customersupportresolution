@@ -71,12 +71,21 @@ class ConfigLoader:
         return self._config.get("policy", {}).get("policies", {})
 
     def get_policy(self, policy_name: str):
-        """Get specific policy by name."""
+        """Get specific policy by name (legacy method)."""
         return self.get_policies().get(policy_name, {})
 
-    def get_severity_levels(self):
-        """Get severity level definitions."""
-        return self._config.get("policy", {}).get("severity_levels", {})
+    def get_policy_for_intent(self, intent_name: str):
+        """Get policy configuration for a specific intent (keyed by intent name)."""
+        return self.get_policies().get(intent_name, {})
+
+    # -----------------------------------------------------
+    # Entity Config
+    # -----------------------------------------------------
+
+    def get_entity_schema(self, tenant_id: str = "default"):
+        """Get entity schema for a specific tenant."""
+        entities = self._config.get("entities", {})
+        return entities.get(tenant_id, entities.get("default", {}))
 
     # -----------------------------------------------------
     # Routing Config

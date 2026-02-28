@@ -20,6 +20,10 @@ CONFIG = {
             "prompt_version": "v1",
             "max_retries": 1
         },
+        "ContextBuilderAgent": {
+            "prompt_version": "v1",
+            "max_retries": 2
+        },
         "PolicyAgent": {
             "prompt_version": "v1",
             "max_retries": 0
@@ -53,7 +57,12 @@ CONFIG = {
         ],
         "confidence_threshold": 0.7,
         "tool_mapping": {
-            "FAQ_QUERY": "faq_lookup"
+            "FAQ_QUERY": "faq_lookup",
+            "LOOKUP_FAQ": "faq_lookup",
+            "PROCESS_REFUND": "api_tool",
+            "PROCESS_COMPLAINT": "api_tool",
+            "VERIFY_DATA_ACCESS": "api_tool",
+            "PROCESS_ACCOUNT_UPDATE": "api_tool"
         }
     },
 
@@ -81,68 +90,180 @@ CONFIG = {
     "policy": {
         "enabled": True,
         "policies": {
-            "angry_customer_policy": {
-                "description": "Escalate angry customers regardless of intent",
-                "conditions": {
-                    "required_intent": [],
-                    "blocked_sentiments": ["ANGRY"]
-                },
-                "actions_on_violation": {
-                    "escalate": True,
-                    "restrict_response": "I understand you're upset. Let me connect you with a specialist who can help resolve this immediately."
-                }
+            "REFUND_REQUEST": {
+                "business_action": "PROCESS_REFUND",
+                "required_fields": ["order_id"],
+                "escalate_if_sentiment_above": 0.9,
+                "blocked_sentiments": ["ANGRY"],
+                "priority": "high"
             },
-            "refund_policy": {
-                "description": "Refund request validation rules",
-                "conditions": {
-                    "required_intent": ["REFUND_REQUEST"],
-                    "max_refund_amount": 500.00,
-                    "blocked_sentiments": ["ANGRY"]
-                },
-                "actions_on_violation": {
-                    "escalate": True,
-                    "restrict_response": "I'll need to connect you with a specialist for refund requests over $500."
-                }
+            "COMPLAINT": {
+                "business_action": "PROCESS_COMPLAINT",
+                "required_fields": [],
+                "escalate_if_sentiment_above": 0.7,
+                "priority": "high"
             },
-            "complaint_policy": {
-                "description": "Formal complaint escalation",
-                "conditions": {
-                    "required_intent": ["COMPLAINT"]
-                },
-                "actions_on_violation": {
-                    "escalate": True,
-                    "restrict_response": "Your complaint has been noted. Let me connect you with a customer specialist."
-                }
+            "DATA_ACCESS": {
+                "business_action": "VERIFY_DATA_ACCESS",
+                "required_fields": ["account_id", "verification_code"],
+                "escalate_if_sentiment_above": None,
+                "priority": "normal"
             },
-            "data_access_policy": {
-                "description": "Personal data access validation",
-                "conditions": {
-                    "required_intent": ["DATA_ACCESS", "ACCOUNT_UPDATE"],
-                    "require_authentication": True,
-                    "blocked_for_tenant_ids": []
-                },
-                "actions_on_violation": {
-                    "escalate": True,
-                    "restrict_response": "For security, I cannot process data access requests without proper verification."
-                }
+            "ACCOUNT_UPDATE": {
+                "business_action": "PROCESS_ACCOUNT_UPDATE",
+                "required_fields": ["account_id"],
+                "escalate_if_sentiment_above": 0.85,
+                "priority": "normal"
             },
-            "blocked_tenant_policy": {
-                "description": "Blocked tenant check",
-                "conditions": {
-                    "required_intent": [],
-                    "blocked_for_tenant_ids": ["banned_tenant_123"]
-                },
-                "actions_on_violation": {
-                    "escalate": True,
-                    "restrict_response": "Service is not available for this account."
-                }
+            "FAQ_QUERY": {
+                "business_action": "LOOKUP_FAQ",
+                "required_fields": [],
+                "escalate_if_sentiment_above": None,
+                "priority": "low"
+            }
+        }
+    },
+
+    "entities": {
+        "default": {
+            "description": "Default entity schema when tenant not specified",
+            "fields": {
+                "order_id": {"type": "string", "description": "Order or transaction ID"},
+                "amount": {"type": "number", "description": "Monetary amount"},
+                "currency": {"type": "string", "description": "Currency code (USD, EUR, INR, etc.)"}
             }
         },
-        "severity_levels": {
-            "LOW": "Minor policy concern, can respond with caveat",
-            "MEDIUM": "Policy violation, consider escalation",
-            "HIGH": "Significant policy violation, must escalate",
-            "CRITICAL": "Severe violation, immediate human intervention required"
+        "amazon": {
+            "description": "Amazon tenant entity schema",
+            "fields": {
+                "order_id": {"type": "string", "description": "Amazon order ID (e.g., 123-4567890-1234567)"},
+                "payment_id": {"type": "string", "description": "Payment transaction ID"},
+                "amount": {"type": "number", "description": "Refund or purchase amount"},
+                "currency": {"type": "string", "description": "Currency code"}
+            }
+        },
+        "flipkart": {
+            "description": "Flipkart tenant entity schema",
+            "fields": {
+                "invoice_id": {"type": "string", "description": "Flipkart invoice ID"},
+                "amount": {"type": "number", "description": "Amount in rupees"},
+                "currency": {"type": "string", "description": "INR"}
+            }
+        },
+        "shopify": {
+            "description": "Shopify merchant entity schema",
+            "fields": {
+                "order_number": {"type": "string", "description": "Shopify order number"},
+                "customer_email": {"type": "string", "description": "Customer email address"},
+                "amount": {"type": "number", "description": "Order amount"},
+                "currency": {"type": "string", "description": "Currency code"}
+            }
+        }
+    },
+
+    # ============================================
+    # API Tool Configuration (Multi-Tenant Endpoints)
+    # ============================================
+    "api_endpoints": {
+        "default": {
+            "PROCESS_REFUND": {
+                "url": "https://api.example.com/refunds",
+                "method": "POST",
+                "execution_mode": "sync",
+                "headers": {
+                    "Content-Type": "application/json",
+                    "X-API-Key": get_env("DEFAULT_API_KEY", "demo_key")
+                },
+                "timeout": 30,
+                "retry_attempts": 2,
+                "retry_delay_seconds": 1,
+                "response_mapping": {
+                    "refund_status": "status",
+                    "refund_id": "id",
+                    "estimated_days": "processing_time_days"
+                }
+            },
+            "PROCESS_COMPLAINT": {
+                "url": "https://api.example.com/tickets",
+                "method": "POST",
+                "execution_mode": "sync",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "timeout": 15
+            },
+            "VERIFY_DATA_ACCESS": {
+                "url": "https://api.example.com/data/verify",
+                "method": "POST",
+                "execution_mode": "sync",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "timeout": 10
+            },
+            "PROCESS_ACCOUNT_UPDATE": {
+                "url": "https://api.example.com/account/update",
+                "method": "PUT",
+                "execution_mode": "sync",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "timeout": 20
+            }
+        },
+        "amazon": {
+            "PROCESS_REFUND": {
+                "url": "https://api.amazon.com/marketplace/refunds/v1",
+                "method": "POST",
+                "execution_mode": "sync",
+                "headers": {
+                    "Content-Type": "application/json",
+                    "X-Amz-Target": "com.amazon.esd.retail.EsdRetailService.RefundRequest"
+                },
+                "timeout": 30
+            },
+            "PROCESS_COMPLAINT": {
+                "url": "https://api.amazon.com/support/tickets",
+                "method": "POST",
+                "execution_mode": "async",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "timeout": 15
+            }
+        },
+        "flipkart": {
+            "PROCESS_REFUND": {
+                "url": "https://api.flipkart.com/refunds/v2/process",
+                "method": "POST",
+                "execution_mode": "sync",
+                "headers": {
+                    "Content-Type": "application/json",
+                    "X-FK-API-Key": get_env("FLIPKART_API_KEY", "")
+                },
+                "timeout": 25
+            }
+        },
+        "shopify": {
+            "PROCESS_REFUND": {
+                "url": "https://shopify.com/api/refunds",
+                "method": "POST",
+                "execution_mode": "sync",
+                "headers": {
+                    "Content-Type": "application/json",
+                    "X-Shopify-Access-Token": get_env("SHOPIFY_ACCESS_TOKEN", "")
+                },
+                "timeout": 20
+            },
+            "PROCESS_ACCOUNT_UPDATE": {
+                "url": "https://shopify.com/api/customer/update",
+                "method": "PUT",
+                "execution_mode": "sync",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "timeout": 15
+            }
         }
     },
 
@@ -151,6 +272,7 @@ CONFIG = {
         "nodes": {
             "IntentAgent": {},
             "SentimentAgent": {},
+            "ContextBuilderAgent": {},
             "PolicyAgent": {},
             "DecisionAgent": {},
             "ToolExecutionAgent": {},
@@ -169,10 +291,19 @@ CONFIG = {
             },
             {
                 "from": "SentimentAgent",
-                "to": "PolicyAgent",
+                "to": "ContextBuilderAgent",
                 "condition": {
                     "section": "understanding",
                     "field": "sentiment.label",
+                    "equals": "*"
+                }
+            },
+            {
+                "from": "ContextBuilderAgent",
+                "to": "PolicyAgent",
+                "condition": {
+                    "section": "context",
+                    "field": "entities",
                     "equals": "*"
                 }
             },
@@ -181,7 +312,7 @@ CONFIG = {
                 "to": "DecisionAgent",
                 "condition": {
                     "section": "policy",
-                    "field": "compliant",
+                    "field": "business_action",
                     "equals": "*"
                 }
             },
@@ -230,6 +361,16 @@ CONFIG = {
                     "section": "execution",
                     "field": "tools_called[-1].status",
                     "equals": "failed"
+                }
+            },
+            # Tool pending (async) → ResponseAgent
+            {
+                "from": "ToolExecutionAgent",
+                "to": "ResponseAgent",
+                "condition": {
+                    "section": "execution",
+                    "field": "tools_called[-1].status",
+                    "equals": "pending"
                 }
             }
         ],

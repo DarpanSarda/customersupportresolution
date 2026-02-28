@@ -1,29 +1,34 @@
 # agents/policy_agent.py
 
 from core.BaseAgent import BaseAgent, AgentExecutionContext
-from models.sections import PolicyModel, PolicyViolation
 from models.patch import Patch
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 
 class PolicyAgent(BaseAgent):
     """
-    Evaluates customer requests against configurable business policies.
+    Generic policy evaluation agent - NO domain hardcoding.
+
+    Reads intent from state and evaluates against configured policies.
+    Outputs abstract business_action for DecisionAgent to route.
+
+    Pure logic - no side effects, no tool calls, no routing.
 
     Reads:
-    - understanding.intent: To match policy conditions
-    - understanding.sentiment: To check sentiment-based restrictions
-    - conversation.latest_message: To analyze request content
-    - context: To get tenant_id, user profile
+    - understanding.intent.name: Intent to match against policies
+    - understanding.sentiment.confidence: For escalation thresholds
+    - context: To check required fields
 
     Writes:
-    - policy.compliant: Overall compliance status
-    - policy.applicable_policies: List of policies evaluated
-    - policy.violations: List of violations found
-    - policy.restrictions: Restrictions to apply
-    - policy.reason: Explanation
+    - policy.business_action: Abstract action (PROCESS_REFUND, PROCESS_REPLACEMENT, etc.)
+    - policy.required_fields: Fields needed for this action
+    - policy.missing_fields: Fields not present in context
+    - policy.allow_execution: Whether execution should proceed
+    - policy.escalate: Whether to escalate to human
+    - policy.priority: Priority level (low, normal, high, urgent)
+    - policy.reason: Explanation of policy decision
 
-    All policies are config-driven - no hardcoded business rules.
+    All policies are config-driven by intent name.
     """
 
     agent_name = "PolicyAgent"
@@ -32,193 +37,133 @@ class PolicyAgent(BaseAgent):
     def __init__(self, config: dict, prompt: str):
         super().__init__(config, prompt)
         self.config_loader = config.get("config_loader")
-        self.prompt_loader = config.get("prompt_loader")
-        self.llm_client = config.get("llm_client")
 
     def _run(self, state: dict, context: AgentExecutionContext) -> Patch:
         """
-        Evaluate request against all configured policies.
+        Evaluate intent against configured policy.
 
-        Returns Patch with policy evaluation results.
+        Returns Patch with abstract business action.
         """
         # -------------------------------------------------
-        # 1️⃣ Check if policy evaluation is enabled
-        # -------------------------------------------------
-        if not self.config_loader.is_policy_enabled():
-            return Patch(
-                agent_name=self.agent_name,
-                target_section=self.allowed_section,
-                confidence=1.0,
-                changes={
-                    "compliant": True,
-                    "applicable_policies": [],
-                    "violations": [],
-                    "restrictions": [],
-                    "reason": "Policy evaluation disabled"
-                }
-            )
-
-        # -------------------------------------------------
-        # 2️⃣ Extract data from state
+        # 1️⃣ Extract data from state
         # -------------------------------------------------
         understanding = state.get("understanding", {})
         intent_data = understanding.get("intent", {})
         intent_name = intent_data.get("name")
 
         sentiment_data = understanding.get("sentiment", {})
+        sentiment_confidence = sentiment_data.get("confidence", 0.0)
         sentiment_label = sentiment_data.get("label", "NEUTRAL")
 
         context_data = state.get("context", {})
-        tenant_id = context_data.get("tenant_id", context.tenant_id if context else "default")
 
         # -------------------------------------------------
-        # 3️⃣ Get all policies from config
+        # 2️⃣ Get policy config for this intent
         # -------------------------------------------------
-        all_policies = self.config_loader.get_policies()
+        policy_config = self.config_loader.get_policy_for_intent(intent_name)
 
         # -------------------------------------------------
-        # 4️⃣ Evaluate each policy
+        # 3️⃣ Evaluate policy (or return default if no policy)
         # -------------------------------------------------
-        applicable_policies = []
-        violations = []
-        restrictions = []
-
-        for policy_name, policy_config in all_policies.items():
-            evaluation = self._evaluate_policy(
-                policy_name=policy_name,
+        if not policy_config:
+            # No policy defined for this intent - allow normal flow
+            policy_output = {
+                "business_action": None,
+                "required_fields": [],
+                "missing_fields": [],
+                "allow_execution": True,
+                "escalate": False,
+                "priority": "normal",
+                "reason": f"No policy defined for intent '{intent_name}'"
+            }
+        else:
+            policy_output = self._evaluate_policy(
                 policy_config=policy_config,
                 intent_name=intent_name,
+                sentiment_confidence=sentiment_confidence,
                 sentiment_label=sentiment_label,
-                tenant_id=tenant_id
+                context_data=context_data
             )
 
-            if evaluation["applicable"]:
-                applicable_policies.append(policy_name)
-
-                if evaluation["violated"]:
-                    violations.append(PolicyViolation(
-                        policy_name=policy_name,
-                        severity=evaluation["severity"],
-                        reason=evaluation["reason"]
-                    ))
-                    restrictions.extend(evaluation.get("restrictions", []))
-
         # -------------------------------------------------
-        # 5️⃣ Determine overall compliance
-        # -------------------------------------------------
-        is_compliant = len(violations) == 0
-
-        if not is_compliant:
-            # Check if any critical violations
-            has_critical = any(v.severity == "CRITICAL" for v in violations)
-            if has_critical:
-                reason = f"Critical policy violations detected: {[v.policy_name for v in violations if v.severity == 'CRITICAL']}"
-            else:
-                reason = f"Policy violations detected: {[v.policy_name for v in violations]}"
-        else:
-            if applicable_policies:
-                reason = f"All {len(applicable_policies)} applicable policies passed"
-            else:
-                reason = "No policies applicable to this request"
-
-        # -------------------------------------------------
-        # 6️⃣ Return Patch
+        # 4️⃣ Return Patch
         # -------------------------------------------------
         return Patch(
             agent_name=self.agent_name,
             target_section=self.allowed_section,
             confidence=1.0,  # Policy evaluation is deterministic
-            changes={
-                "compliant": is_compliant,
-                "applicable_policies": applicable_policies,
-                "violations": [v.model_dump() for v in violations],
-                "restrictions": restrictions,
-                "reason": reason
-            }
+            changes=policy_output
         )
 
     def _evaluate_policy(
         self,
-        policy_name: str,
         policy_config: dict,
         intent_name: str,
+        sentiment_confidence: float,
         sentiment_label: str,
-        tenant_id: str
+        context_data: dict
     ) -> Dict[str, Any]:
         """
-        Evaluate a single policy against the request.
+        Evaluate a single policy configuration.
 
-        Returns:
-            dict with keys: applicable, violated, severity, reason, restrictions
+        Returns dict with business_action, required_fields, missing_fields,
+        allow_execution, escalate, priority, reason.
         """
-        conditions = policy_config.get("conditions", {})
-        actions = policy_config.get("actions_on_violation", {})
+        # Extract policy settings
+        business_action = policy_config.get("business_action")
+        required_fields = policy_config.get("required_fields", [])
+        blocked_sentiments = policy_config.get("blocked_sentiments", [])
+        priority = policy_config.get("priority", "normal")
 
-        # Check 1: Required intent match
-        required_intents = conditions.get("required_intent", [])
-        if required_intents:
-            if intent_name not in required_intents:
-                # Policy doesn't apply to this intent
-                return {
-                    "applicable": False,
-                    "violated": False,
-                    "severity": "NONE",
-                    "reason": f"Policy {policy_name} not applicable for intent {intent_name}",
-                    "restrictions": []
-                }
+        # -------------------------------------------------
+        # Check 1: Missing required fields
+        # -------------------------------------------------
+        missing_fields = []
+        for field in required_fields:
+            if not context_data.get(field):
+                missing_fields.append(field)
 
-        # Policy applies if we get here
-        result = {
-            "applicable": True,
-            "violated": False,
-            "severity": "NONE",
-            "reason": f"Policy {policy_name} passed",
-            "restrictions": []
+        # -------------------------------------------------
+        # Check 2: Sentiment-based escalation
+        # -------------------------------------------------
+        escalate = False
+        escalate_reason = None
+
+        # Escalate only if sentiment label is in blocked list (e.g., ANGRY)
+        # Note: sentiment_confidence is about classification certainty, NOT emotional intensity
+        if blocked_sentiments and sentiment_label in blocked_sentiments:
+            escalate = True
+            escalate_reason = f"Sentiment '{sentiment_label}' is in blocked list"
+
+        # -------------------------------------------------
+        # Determine allow_execution
+        # -------------------------------------------------
+        allow_execution = len(missing_fields) == 0 and not escalate
+
+        # -------------------------------------------------
+        # Build reason
+        # -------------------------------------------------
+        reason_parts = []
+        if business_action:
+            reason_parts.append(f"Intent '{intent_name}' maps to action '{business_action}'")
+        if missing_fields:
+            reason_parts.append(f"Missing fields: {missing_fields}")
+        if escalate and escalate_reason:
+            reason_parts.append(f"Escalate: {escalate_reason}")
+        if not escalate and not missing_fields:
+            reason_parts.append("All checks passed - execution allowed")
+
+        reason = ". ".join(reason_parts) if reason_parts else f"Policy evaluated for '{intent_name}'"
+
+        # -------------------------------------------------
+        # Return policy output
+        # -------------------------------------------------
+        return {
+            "business_action": business_action,
+            "required_fields": required_fields,
+            "missing_fields": missing_fields,
+            "allow_execution": allow_execution,
+            "escalate": escalate,
+            "priority": priority,
+            "reason": reason
         }
-
-        # Check 2: Blocked sentiments
-        blocked_sentiments = conditions.get("blocked_sentiments", [])
-        if sentiment_label in blocked_sentiments:
-            result.update({
-                "violated": True,
-                "severity": "HIGH",
-                "reason": f"Sentiment {sentiment_label} triggers policy review for {policy_name}",
-                "restrictions": [actions.get("restrict_response", "")]
-            })
-            return result
-
-        # Check 3: Blocked tenant IDs
-        blocked_tenants = conditions.get("blocked_for_tenant_ids", [])
-        if tenant_id in blocked_tenants:
-            result.update({
-                "violated": True,
-                "severity": "CRITICAL",
-                "reason": f"Tenant {tenant_id} is blocked for {policy_name}",
-                "restrictions": ["Service not available for this tenant"]
-            })
-            return result
-
-        # Check 4: Require authentication
-        if conditions.get("require_authentication"):
-            if not self._is_authenticated(tenant_id):
-                result.update({
-                    "violated": True,
-                    "severity": "HIGH",
-                    "reason": f"Authentication required for {policy_name}",
-                    "restrictions": ["Authentication required"]
-                })
-                return result
-
-        # All checks passed
-        return result
-
-    def _is_authenticated(self, tenant_id: str) -> bool:
-        """
-        Check if tenant/session is authenticated.
-
-        Placeholder for real authentication check.
-        In production, would validate session token, API key, or user session.
-        """
-        # TODO: Implement real authentication check
-        # For now, return True to allow policy evaluation to proceed
-        return True

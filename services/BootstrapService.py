@@ -11,6 +11,7 @@ from observability.structured_logger import StructuredLogger
 
 from agents.IntentAgent import IntentAgent
 from agents.SentimentAgent import SentimentAgent
+from agents.ContextBuilderAgent import ContextBuilderAgent
 from agents.PolicyAgent import PolicyAgent
 from agents.DecisionAgent import DecisionAgent
 from agents.ResponseAgent import ResponseAgent
@@ -18,8 +19,9 @@ from agents.ToolExecutionAgent import ToolExecutionAgent
 from agents.FallbackAgent import FallbackAgent
 
 from tools.FAQLookupTool import FAQLookupTool
+from tools.ApiTool import ApiTool
 
-from models.sections import UnderstandingSchema, LifecycleSchema, DecisionSchema, ExecutionSchema, PolicySchema
+from models.sections import UnderstandingSchema, LifecycleSchema, DecisionSchema, ExecutionSchema, PolicySchema, ContextSchema
 
 
 class SystemContainer:
@@ -62,8 +64,16 @@ def bootstrap_system(config: dict) -> SystemContainer:
     # -----------------------------------------------------
     # 5️⃣ Tool Registry
     # -----------------------------------------------------
-    tool_registry = ToolRegistry()
+    tool_registry_config = {
+        "tool_mapping": config.get("intent", {}).get("tool_mapping", {}),
+        "endpoints": config.get("api_endpoints", {})
+    }
+
+    tool_registry = ToolRegistry(config=tool_registry_config)
+
+    # Register tools
     tool_registry.register(FAQLookupTool())
+    tool_registry.register(ApiTool(config=tool_registry_config))
 
     # -----------------------------------------------------
     # 5️⃣ Agent Registry
@@ -76,6 +86,10 @@ def bootstrap_system(config: dict) -> SystemContainer:
         "SentimentAgent": {
             "allowed_section": "understanding",
             "class": SentimentAgent
+        },
+        "ContextBuilderAgent": {
+            "allowed_section": "context",
+            "class": ContextBuilderAgent
         },
         "PolicyAgent": {
             "allowed_section": "policy",
@@ -108,6 +122,7 @@ def bootstrap_system(config: dict) -> SystemContainer:
     # -----------------------------------------------------
     section_schemas = {
         "understanding": UnderstandingSchema,
+        "context": ContextSchema,
         "policy": PolicySchema,
         "decision": DecisionSchema,
         "execution": ExecutionSchema,

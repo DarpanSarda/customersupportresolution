@@ -92,6 +92,8 @@ class GraphEngine:
         else:
             current_node = self.graph_config["entry_node"]
             self._update_lifecycle(current_node, "active")
+            # Initialize context section with tenant_id from execution context
+            self._initialize_context(execution_context, session_id)
 
         # -------------------------------------------------
         # 2️⃣ Graph Execution Loop (DAG)
@@ -127,6 +129,43 @@ class GraphEngine:
     # -----------------------------------------------------
     # Lifecycle Update via Patch
     # -----------------------------------------------------
+
+    def _initialize_context(self, execution_context, session_id: str = "default") -> None:
+        """Initialize context section with tenant_id from execution context.
+
+        Args:
+            execution_context: AgentExecutionContext with tenant_id
+            session_id: Session identifier for isolation
+
+        Note:
+            Creates a system patch to set tenant_id before agents run.
+            This ensures ContextBuilderAgent has access to tenant_id.
+        """
+        from models.patch import Patch
+        from core.BaseAgent import AgentExecutionContext
+
+        context_patch = Patch(
+            agent_name="SystemGraphEngine",
+            target_section="context",
+            confidence=1.0,
+            changes={
+                "tenant_id": execution_context.tenant_id if execution_context else "default",
+                "entities": {},
+                "extraction_confidence": 0.0,
+                "extracted_fields": [],
+                "extraction_reason": None
+            },
+            metadata={
+                "execution_time_ms": 0,
+                "config_version": "system",
+                "prompt_version": "system",
+                "trace_id": "system",
+                "request_id": "system",
+                "session_id": session_id
+            }
+        )
+
+        self.orchestrator.execute_system_patch(context_patch, session_id)
 
     def _update_lifecycle(self, node: str, status: str, session_id: str = "default") -> None:
         """Update lifecycle section via system patch.

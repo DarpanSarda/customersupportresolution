@@ -70,12 +70,17 @@ class PatchValidator:
         # -------------------------------------------------
         # 2️⃣ Section Authorization
         # -------------------------------------------------
-        allowed_section = self.agent_registry[patch.agent_name]
+        # System agents (prefixed with "System") can write to any section
+        # This allows initialization of context, lifecycle, etc. before agents run
+        is_system_agent = patch.agent_name.startswith("System")
 
-        if patch.target_section != allowed_section:
-            raise ValueError(
-                f"{patch.agent_name} not allowed to write to {patch.target_section}"
-            )
+        if not is_system_agent:
+            allowed_section = self.agent_registry[patch.agent_name]
+
+            if patch.target_section != allowed_section:
+                raise ValueError(
+                    f"{patch.agent_name} not allowed to write to {patch.target_section}"
+                )
 
         # -------------------------------------------------
         # 3️⃣ Section Exists in State
