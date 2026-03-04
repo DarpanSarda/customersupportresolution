@@ -42,13 +42,77 @@ CONFIG = {
         "FallbackAgent": {
             "prompt_version": "v1",
             "max_retries": 0
+        },
+        "RAGAgent": {
+            "enabled": True,
+            "prompt_version": "v1",
+            "max_retries": 1
+        },
+        "WebSearchAgent": {
+            "enabled": True,
+            "prompt_version": "v1",
+            "max_retries": 1
+        },
+        "EscalationAgent": {
+            "enabled": True,
+            "prompt_version": "v1",
+            "max_retries": 0
+        },
+        "VannaAgent": {
+            "enabled": True,
+            "prompt_version": "v1",
+            "max_retries": 1
         }
+    },
+
+    "vanna": {
+        "enabled": True,
+        "db_type": "sqlite",
+        "dialect": "postgres",
+        "connection_string": get_env("DATABASE_URL", "./data/database.db"),
+        "schema": """
+        -- Orders table
+        CREATE TABLE orders (
+            order_id TEXT PRIMARY KEY,
+            customer_id TEXT,
+            status TEXT,
+            amount REAL,
+            created_at TIMESTAMP
+        );
+
+        -- Payments table
+        CREATE TABLE payments (
+            payment_id TEXT PRIMARY KEY,
+            order_id TEXT,
+            status TEXT,
+            amount REAL,
+            payment_method TEXT,
+            created_at TIMESTAMP
+        );
+
+        -- Products table
+        CREATE TABLE products (
+            product_id TEXT PRIMARY KEY,
+            name TEXT,
+            category TEXT,
+            price REAL
+        );
+
+        -- Order items table
+        CREATE TABLE order_items (
+            item_id TEXT PRIMARY KEY,
+            order_id TEXT,
+            product_id TEXT,
+            quantity INTEGER
+        );
+        """
     },
 
     "intent": {
         "labels": [
             "GREETING",
             "FAQ_QUERY",
+            "SQL_QUERY",
             "REFUND_REQUEST",
             "COMPLAINT",
             "DATA_ACCESS",
@@ -124,6 +188,66 @@ CONFIG = {
         }
     },
 
+    "escalation": {
+        "enabled": True,
+        "priority_thresholds": {
+            "ANGRY": "CRITICAL",
+            "FRUSTRATED": "HIGH",
+            "NEGATIVE": "MEDIUM"
+        },
+        "default_channel": "ticket_system",
+        "channels": {
+            "ticket_system": {
+                "description": "Create ticket in support system",
+                "tool_mapping": "ticket_creation_tool"
+            },
+            "email": {
+                "description": "Send escalation email",
+                "tool_mapping": "email_tool"
+            },
+            "slack": {
+                "description": "Post to Slack channel",
+                "tool_mapping": "slack_webhook_tool"
+            },
+            "webhook": {
+                "description": "Call external webhook",
+                "tool_mapping": "webhook_tool"
+            }
+        },
+        "tenants": {
+            "default": {
+                "channel": "ticket_system",
+                "priority_mapping": {
+                    "ANGRY": "CRITICAL",
+                    "FRUSTRATED": "HIGH"
+                }
+            },
+            "amazon": {
+                "channel": "ticket_system",
+                "priority_mapping": {
+                    "ANGRY": "CRITICAL",
+                    "FRUSTRATED": "HIGH",
+                    "NEGATIVE": "MEDIUM"
+                },
+                "vip_threshold": "high"
+            },
+            "flipkart": {
+                "channel": "slack",
+                "priority_mapping": {
+                    "ANGRY": "CRITICAL",
+                    "FRUSTRATED": "HIGH"
+                }
+            },
+            "shopify": {
+                "channel": "email",
+                "priority_mapping": {
+                    "ANGRY": "CRITICAL",
+                    "FRUSTRATED": "HIGH"
+                }
+            }
+        }
+    },
+
     "entities": {
         "default": {
             "description": "Default entity schema when tenant not specified",
@@ -158,6 +282,122 @@ CONFIG = {
                 "amount": {"type": "number", "description": "Order amount"},
                 "currency": {"type": "string", "description": "Currency code"}
             }
+        }
+    },
+
+    # ============================================
+    # RAG Configuration (Cascade Retrieval)
+    # ============================================
+    "rag": {
+        "enabled": True,
+        "embeddings": {
+            "normalize_embeddings": True,
+            "device": "cpu",
+            "cache_dir": None,
+            "stage_1": {
+                "model": "BAAI/bge-small-en-v1.5",
+                "dimension": 384,
+                "description": "Fast, broad search for stage 1"
+            },
+            "stage_2": {
+                "model": "BAAI/bge-base-en-v1.5",
+                "dimension": 768,
+                "description": "Quality refinement for stage 2"
+            }
+        },
+        "reranker": {
+            "enabled": True,
+            "type": "bge",  # Options: "bge", "flashrank"
+            "model": "BAAI/bge-reranker-large",
+            "top_k": 15,
+            "batch_size": 16
+        },
+        "vector_store": {
+            "type": "qdrant",
+            "collection_prefix": "cs_",
+            "distance": "COSINE",
+            "qdrant_url": get_env("QDRANT_URL", "http://localhost:6333"),
+            "qdrant_api_key": get_env("QDRANT_API_KEY", None)
+        },
+        "retrieval": {
+            "stage_1": {
+                "top_k": 100,
+                "score_threshold": 0.3
+            },
+            "stage_2": {
+                "top_k": 50,
+                "score_threshold": 0.4
+            },
+            "reranker": {
+                "top_k": 15,
+                "score_threshold": 0.5
+            }
+        },
+        "document_ingestion": {
+            "chunk_size": 500,
+            "chunk_overlap": 50,
+            "default_sources": ["faq", "manual", "sop", "policy"]
+        },
+        "web_search": {
+            "enabled": True,
+            "primary_provider": "tavily",
+            "max_results": 10,
+            "search_depth": "basic",
+            "tavily_api_key": get_env("TAVILY_API_KEY"),
+            "serper_api_key": get_env("SERPER_API_KEY")
+        }
+    },
+
+    # ============================================
+    # Tool Configuration (Multi-Tenant)
+    # ============================================
+    "tools": {
+        "ticket_creation_tool": {
+            "endpoints": {
+                "default": {
+                    "url": get_env("TICKET_API_URL", "https://api.ticketsystem.com/create"),
+                    "api_key": get_env("TICKET_API_KEY", "")
+                },
+                "amazon": {
+                    "url": get_env("AMAZON_TICKET_API_URL", "https://amazon.support.com/api/tickets"),
+                    "api_key": get_env("AMAZON_TICKET_API_KEY", "")
+                },
+                "flipkart": {
+                    "url": get_env("FLIPKART_TICKET_API_URL", "https://flipkart.support.com/api/tickets"),
+                    "api_key": get_env("FLIPKART_TICKET_API_KEY", "")
+                },
+                "shopify": {
+                    "url": get_env("SHOPIFY_TICKET_API_URL", "https://shopify.support.com/api/tickets"),
+                    "api_key": get_env("SHOPIFY_TICKET_API_KEY", "")
+                }
+            }
+        },
+        "email_tool": {
+            "endpoints": {
+                "default": {
+                    "url": get_env("EMAIL_API_URL", "https://api.emailservice.com/send"),
+                    "api_key": get_env("EMAIL_API_KEY", ""),
+                    "default_from": get_env("EMAIL_DEFAULT_FROM", "noreply@example.com")
+                },
+                "amazon": {
+                    "url": get_env("AMAZON_EMAIL_API_URL", "https://ses.amazonaws.com/send"),
+                    "api_key": get_env("AMAZON_EMAIL_API_KEY", ""),
+                    "default_from": "support@amazon.com"
+                },
+                "flipkart": {
+                    "url": get_env("FLIPKART_EMAIL_API_URL", "https://flipkart.email.com/send"),
+                    "api_key": get_env("FLIPKART_EMAIL_API_KEY", ""),
+                    "default_from": "support@flipkart.com"
+                },
+                "shopify": {
+                    "url": get_env("SHOPIFY_EMAIL_API_URL", "https://shopify.email.com/send"),
+                    "api_key": get_env("SHOPIFY_EMAIL_API_KEY", ""),
+                    "default_from": "support@shopify.com"
+                }
+            }
+        },
+        "api_tool": {
+            "endpoints": {}  # Uses api_endpoints config below
         }
     },
 
@@ -273,8 +513,11 @@ CONFIG = {
             "IntentAgent": {},
             "SentimentAgent": {},
             "ContextBuilderAgent": {},
+            "RAGAgent": {},
+            "VannaAgent": {},
             "PolicyAgent": {},
             "DecisionAgent": {},
+            "EscalationAgent": {},
             "ToolExecutionAgent": {},
             "ResponseAgent": {},
             "FallbackAgent": {}
@@ -300,10 +543,19 @@ CONFIG = {
             },
             {
                 "from": "ContextBuilderAgent",
-                "to": "PolicyAgent",
+                "to": "RAGAgent",
                 "condition": {
                     "section": "context",
                     "field": "entities",
+                    "equals": "*"
+                }
+            },
+            {
+                "from": "RAGAgent",
+                "to": "PolicyAgent",
+                "condition": {
+                    "section": "knowledge",
+                    "field": "documents",
                     "equals": "*"
                 }
             },
@@ -336,11 +588,31 @@ CONFIG = {
             },
             {
                 "from": "DecisionAgent",
-                "to": "ResponseAgent",
+                "to": "EscalationAgent",
                 "condition": {
                     "section": "decision",
                     "field": "action",
                     "equals": "ESCALATE"
+                }
+            },
+            # EscalationAgent → ToolExecutionAgent (escalation tool execution)
+            {
+                "from": "EscalationAgent",
+                "to": "ToolExecutionAgent",
+                "condition": {
+                    "section": "escalation",
+                    "field": "business_action",
+                    "equals": "*"
+                }
+            },
+            # EscalationAgent → ResponseAgent (escalation complete, inform user)
+            {
+                "from": "EscalationAgent",
+                "to": "ResponseAgent",
+                "condition": {
+                    "section": "escalation",
+                    "field": "status",
+                    "equals": "initiated"
                 }
             },
             # Tool success → ResponseAgent

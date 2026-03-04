@@ -48,6 +48,7 @@ class BaseAgent(ABC):
     def __init__(self, config: Dict[str, Any], prompt: str):
         self._config = config
         self._prompt = prompt
+        self._tool_registry = config.get("tool_registry")
 
     # -----------------------------------------------------
     # PUBLIC EXECUTION ENTRYPOINT
@@ -142,6 +143,62 @@ class BaseAgent(ABC):
         """
         if not isinstance(state, dict):
             raise TypeError("State must be dictionary")
+
+    # -----------------------------------------------------
+    # TOOL ACCESS (Optional)
+    # -----------------------------------------------------
+
+    def _get_tool(self, tool_name: str, tenant_id: str = "default"):
+        """
+        Get a tool by name.
+
+        Args:
+            tool_name: Name of the tool to retrieve
+            tenant_id: Tenant identifier
+
+        Returns:
+            BaseTool instance or None if tool_registry not available
+        """
+        if self._tool_registry is None:
+            return None
+        return self._tool_registry.get(tool_name)
+
+    def _resolve_tool(self, business_action: str, tenant_id: str = "default"):
+        """
+        Resolve a tool from business action.
+
+        Args:
+            business_action: Business action to resolve
+            tenant_id: Tenant identifier
+
+        Returns:
+            BaseTool instance or None if tool_registry not available
+        """
+        if self._tool_registry is None:
+            return None
+        return self._tool_registry.resolve(business_action, tenant_id)
+
+    def _execute_tool(
+        self,
+        tool_name: str,
+        payload: Dict[str, Any],
+        tenant_id: str = "default"
+    ):
+        """
+        Execute a tool by name.
+
+        Args:
+            tool_name: Name of the tool
+            payload: Tool input payload
+            tenant_id: Tenant identifier
+
+        Returns:
+            ToolResult or None if tool not available
+        """
+        tool = self._get_tool(tool_name, tenant_id)
+        if tool is None:
+            return None
+        return tool.execute(payload, tenant_id)
 
     # -----------------------------------------------------
     # LOGGING

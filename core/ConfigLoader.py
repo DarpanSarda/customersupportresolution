@@ -88,6 +88,56 @@ class ConfigLoader:
         return entities.get(tenant_id, entities.get("default", {}))
 
     # -----------------------------------------------------
+    # RAG Config
+    # -----------------------------------------------------
+
+    def is_rag_enabled(self):
+        """Check if RAG retrieval is enabled."""
+        return self._config.get("rag", {}).get("enabled", True)
+
+    def get_rag_config(self):
+        """Get full RAG configuration."""
+        return self._config.get("rag", {})
+
+    def get_embeddings_config(self):
+        """Get embeddings configuration."""
+        return self._config.get("rag", {}).get("embeddings", {})
+
+    def get_stage_embedding_config(self, stage: str):
+        """Get embedding config for specific stage (stage_1 or stage_2)."""
+        embeddings = self.get_embeddings_config()
+        return embeddings.get(stage, {})
+
+    def get_reranker_config(self):
+        """Get reranker configuration."""
+        return self._config.get("rag", {}).get("reranker", {})
+
+    def is_reranker_enabled(self):
+        """Check if reranker is enabled."""
+        return self._config.get("rag", {}).get("reranker", {}).get("enabled", True)
+
+    def get_vector_store_config(self):
+        """Get vector store configuration."""
+        return self._config.get("rag", {}).get("vector_store", {})
+
+    def get_retrieval_config(self):
+        """Get retrieval configuration."""
+        return self._config.get("rag", {}).get("retrieval", {})
+
+    def get_stage_retrieval_config(self, stage: str):
+        """Get retrieval config for specific stage."""
+        retrieval = self.get_retrieval_config()
+        return retrieval.get(stage, {})
+
+    def is_web_search_enabled(self):
+        """Check if web search is enabled."""
+        return self._config.get("rag", {}).get("web_search", {}).get("enabled", False)
+
+    def get_web_search_config(self):
+        """Get web search configuration."""
+        return self._config.get("rag", {}).get("web_search", {})
+
+    # -----------------------------------------------------
     # Routing Config
     # -----------------------------------------------------
 
@@ -113,3 +163,40 @@ class ConfigLoader:
     def get_logging_config(self):
         """Get logging configuration."""
         return self._config.get("observability", {}).get("logging", {})
+
+    # -----------------------------------------------------
+    # Escalation Config
+    # -----------------------------------------------------
+
+    def is_escalation_enabled(self):
+        """Check if escalation is enabled."""
+        return self._config.get("escalation", {}).get("enabled", True)
+
+    def get_escalation_config(self):
+        """Get full escalation configuration."""
+        return self._config.get("escalation", {})
+
+    def get_escalation_priority_thresholds(self):
+        """Get sentiment-to-priority mapping for escalation."""
+        return self._config.get("escalation", {}).get("priority_thresholds", {})
+
+    def get_escalation_channel(self):
+        """Get default escalation channel."""
+        return self._config.get("escalation", {}).get("default_channel", "ticket_system")
+
+    def get_tenant_escalation_config(self, tenant_id: str = "default"):
+        """Get tenant-specific escalation configuration."""
+        tenants = self._config.get("escalation", {}).get("tenants", {})
+        return tenants.get(tenant_id, tenants.get("default", {}))
+
+    # -----------------------------------------------------
+    # Vanna Config
+    # -----------------------------------------------------
+
+    def is_vanna_enabled(self):
+        """Check if Vanna text-to-SQL is enabled."""
+        return self._config.get("vanna", {}).get("enabled", True)
+
+    def get_vanna_config(self):
+        """Get full Vanna configuration."""
+        return self._config.get("vanna", {})

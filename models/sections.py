@@ -102,3 +102,119 @@ class ContextSchema(BaseModel):
     extraction_confidence: float = Field(0.0, ge=0.0, le=1.0, description="Confidence in extraction completeness")
     extracted_fields: List[str] = Field(default_factory=list, description="List of successfully extracted field names")
     extraction_reason: Optional[str] = Field(None, description="Explanation of extraction result")
+
+
+# ============================================================
+# RAG / Knowledge Retrieval Models (Tier 2)
+# ============================================================
+
+class RetrievedDocument(BaseModel):
+    """Single retrieved document from vector store."""
+    content: str = Field(..., description="Document text content")
+    doc_id: str = Field(..., description="Unique document identifier")
+    source: str = Field(..., description="Source type: faq, manual, sop, policy, etc.")
+    metadata: dict = Field(default_factory=dict, description="Document metadata (tenant, category, etc.)")
+    score: float = Field(..., ge=0.0, le=1.0, description="Relevance score (0-1)")
+    stage: Optional[str] = Field(None, description="Which stage retrieved this: stage_1, stage_2, reranker")
+
+
+class RAGSchema(BaseModel):
+    """Schema for knowledge section (RAGAgent output).
+
+    Contains retrieved documents from vector database with cascade retrieval:
+    - Stage 1: bge-small (100 docs) - Fast, broad search
+    - Stage 2: bge-base (50 docs) - Quality refinement
+    - Stage 3: reranker (15 docs) - Final selection
+    """
+    query: str = Field(..., description="Original user query for retrieval")
+    documents: List[RetrievedDocument] = Field(default_factory=list, description="Final retrieved documents")
+    total_retrieved: int = Field(..., description="Number of documents retrieved")
+    retrieval_method: str = Field(default="cascade", description="cascade, vector, hybrid")
+    confidence: float = Field(0.0, ge=0.0, le=1.0, description="Average relevance score")
+    has_relevant_content: bool = Field(default=False, description="Whether relevant documents were found")
+
+    # Cascade stage metadata
+    stage_1_count: Optional[int] = Field(None, description="Stage 1 retrieval count")
+    stage_2_count: Optional[int] = Field(None, description="Stage 2 retrieval count")
+    reranker_count: Optional[int] = Field(None, description="After reranker count")
+    retrieval_latency_ms: Optional[int] = Field(None, description="Total retrieval time")
+
+
+# ============================================================
+# Web Search Models (Tier 2)
+# ============================================================
+
+class WebSearchResult(BaseModel):
+    """Single result from web search."""
+    title: str = Field(..., description="Title of the search result")
+    url: str = Field(..., description="URL of the search result")
+    content: str = Field(..., description="Snippet/content of the search result")
+    score: float = Field(default=0.0, ge=0.0, le=1.0, description="Relevance score")
+    source: str = Field(default="web", description="Search provider: tavily, serper, etc.")
+    published_date: Optional[str] = Field(None, description="Publication date if available")
+
+
+class WebSearchSchema(BaseModel):
+    """Schema for web_search section (WebSearchAgent output).
+
+    Contains web search results when internal knowledge is insufficient.
+    """
+    query: str = Field(..., description="Original search query")
+    results: List[WebSearchResult] = Field(default_factory=list, description="Web search results")
+    total_results: int = Field(default=0, description="Number of results retrieved")
+    search_provider: str = Field(default="tavily", description="Search provider used: tavily, serper")
+    has_results: bool = Field(default=False, description="Whether results were found")
+    search_latency_ms: Optional[int] = Field(None, description="Total search time")
+
+
+# ============================================================
+# Escalation Models (Tier 3)
+# ============================================================
+
+class EscalationSchema(BaseModel):
+    """Schema for escalation section (EscalationAgent output).
+
+    EscalationAgent builds the escalation payload AFTER DecisionAgent
+    has already decided to escalate. It does NOT decide escalation,
+    it only prepares the escalation metadata.
+
+    Reads from:
+    - decision.action: Must be "ESCALATE"
+    - decision.route: Escalation reason route
+    - decision.reason: Human-readable reason
+    - understanding.sentiment: For priority calculation
+    - policy.priority: Base priority level
+
+    Writes to:
+    - escalation section with structured escalation metadata
+    """
+    reason: str = Field(..., description="Why escalation was triggered (from decision.route)")
+    priority: str = Field(..., description="Priority level: LOW, MEDIUM, HIGH, CRITICAL")
+    status: str = Field(default="initiated", description="Escalation status: initiated, pending, completed")
+    channel: str = Field(default="ticket_system", description="Escalation channel: ticket_system, email, slack, webhook")
+    business_action: str = Field(default="CREATE_ESCALATION_TICKET", description="Business action for ToolExecutionAgent")
+
+    # Context for human agent
+    tenant_id: Optional[str] = Field(None, description="Tenant identifier")
+    session_id: Optional[str] = Field(None, description="Session identifier for tracking")
+    summary: Optional[str] = Field(None, description="Brief summary for human agent")
+
+    # Timestamps
+    escalated_at: Optional[str] = Field(None, description="When escalation was initiated")
+
+
+# ============================================================
+# Vanna Text-to-SQL Models
+# ============================================================
+
+class VannaSchema(BaseModel):
+    """Schema for vanna section (VannaAgent output).
+
+    Text-to-SQL query generation and execution results.
+    """
+    status: str = Field(..., description="Query status: success, error")
+    question: str = Field(..., description="Original natural language question")
+    sql: Optional[str] = Field(None, description="Generated SQL query")
+    results: Optional[list] = Field(default_factory=list, description="Query results as list of dicts")
+    count: Optional[int] = Field(None, description="Number of rows returned")
+    error: Optional[str] = Field(None, description="Error message if failed")

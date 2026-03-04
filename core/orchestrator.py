@@ -150,6 +150,11 @@ class Orchestrator:
         agent_config_data["llm_client"] = self.llm_client
         agent_config_data["tool_registry"] = self.tool_registry
 
+        # Inject any extra components from agent registry (e.g., RAG components)
+        for key, value in agent_config.items():
+            if key not in ["class", "allowed_section"] and key not in agent_config_data:
+                agent_config_data[key] = value
+
         # Special handling for ToolExecutionAgent (no BaseAgent inheritance)
         if agent_name == "ToolExecutionAgent":
             agent_instance = agent_class(tool_registry=self.tool_registry)
