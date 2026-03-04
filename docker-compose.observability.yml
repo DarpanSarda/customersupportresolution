@@ -1,0 +1,80 @@
+# Docker Compose for Observability Stack
+# Run: docker-compose -f docker-compose.observability.yml up -d
+#
+# Access URLs:
+#   Jaeger UI:     http://localhost:16686
+#   Prometheus:    http://localhost:9090
+#   Grafana:       http://localhost:3000 (admin/admin)
+#   Langfuse:      https://cloud.langfuse.com (sign up required)
+
+version: '3.8'
+
+services:
+  # ============================================
+  # JAEGER - Distributed Tracing UI
+  # ============================================
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC receiver
+      - "4318:4318"    # OTLP HTTP receiver
+      - "14250:14250"  # Model proto (optional)
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=memory
+    restart: unless-stopped
+    networks:
+      - observability
+
+  # ============================================
+  # PROMETHEUS - Metrics Storage
+  # ============================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--enable-feature=exemplar-storage'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    networks:
+      - observability
+
+  # ============================================
+  # GRAFANA - Dashboards
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./observability/config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./observability/config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    restart: unless-stopped
+    networks:
+      - observability
+    depends_on:
+      - prometheus
+
+networks:
+  observability:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-storage:

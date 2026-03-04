@@ -316,7 +316,7 @@ CONFIG = {
             "type": "qdrant",
             "collection_prefix": "cs_",
             "distance": "COSINE",
-            "qdrant_url": get_env("QDRANT_URL", "http://localhost:6333"),
+            "qdrant_url": get_env("QDRANT_URL", "http://103.180.31.44:8082"),
             "qdrant_api_key": get_env("QDRANT_API_KEY", None)
         },
         "retrieval": {
@@ -649,21 +649,42 @@ CONFIG = {
         "terminal_nodes": ["ResponseAgent", "FallbackAgent"]
     },
 
+    # ============================================
+    # Observability Configuration
+    # ============================================
     "observability": {
+        "enabled": True,
+        "debug": False,
+
+        # OpenTelemetry (Distributed Tracing)
         "otel": {
+            "enabled": True,
             "service_name": "customer-support-resolution",
-            "otlp_endpoint": "http://localhost:4317",
-            "console_export": True,
-            "sample_rate": 1.0
+            "otlp_endpoint": get_env("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317"),
+            "console_export": get_env("OTEL_CONSOLE_EXPORT", "false") == "true",
+            "sample_rate": float(get_env("OTEL_SAMPLE_RATE", "1.0"))
         },
+
+        # Langfuse (LLM Observability)
         "langfuse": {
+            "enabled": True,
             "public_key": get_env("LANGFUSE_PUBLIC_KEY"),
             "secret_key": get_env("LANGFUSE_SECRET_KEY"),
-            "host": "https://cloud.langfuse.com"
+            "host": get_env("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+            "sample_rate": float(get_env("LANGFUSE_SAMPLE_RATE", "1.0"))
         },
+
+        # Prometheus (Metrics)
+        "metrics": {
+            "enabled": True,
+            "port": int(get_env("METRICS_PORT", "9090")),
+            "path": get_env("METRICS_PATH", "/metrics")
+        },
+
+        # Logging
         "logging": {
-            "level": "INFO",
-            "json_output": True
+            "level": get_env("LOG_LEVEL", "INFO"),
+            "json_output": get_env("LOG_JSON_OUTPUT", "true") == "true"
         }
     }
 }

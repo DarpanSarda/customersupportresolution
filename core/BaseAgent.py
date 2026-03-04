@@ -9,6 +9,8 @@ import time
 class AgentExecutionContext:
     """
     Immutable execution context passed by Orchestrator.
+
+    Contains correlation IDs and tracing components for observability.
     """
 
     def __init__(
@@ -20,6 +22,7 @@ class AgentExecutionContext:
         prompt_version: str,
         session_id: str = "default",
         logger=None,
+        tracing_context=None,
     ):
         self.trace_id = trace_id
         self.request_id = request_id
@@ -28,6 +31,28 @@ class AgentExecutionContext:
         self.prompt_version = prompt_version
         self.session_id = session_id
         self.logger = logger
+        self.tracing_context = tracing_context
+
+    @property
+    def langfuse(self):
+        """Get Langfuse tracer from tracing context."""
+        if self.tracing_context:
+            return self.tracing_context.langfuse
+        return None
+
+    @property
+    def otel(self):
+        """Get OTEL tracer from tracing context."""
+        if self.tracing_context:
+            return self.tracing_context.otel
+        return None
+
+    @property
+    def metrics(self):
+        """Get metrics collector from tracing context."""
+        if self.tracing_context:
+            return self.tracing_context.metrics
+        return None
 
 
 class BaseAgent(ABC):
@@ -61,40 +86,104 @@ class BaseAgent(ABC):
     ) -> Patch:
         """
         Wrapper enforcing all enterprise constraints.
+
+        Includes:
+        - State validation
+        - OTEL span creation
+        - Metrics recording
+        - Patch validation
+        - Structured logging
         """
 
         self._validate_statelessness(state)
 
-        start_time = time.time()
-
-        patch = self._run(state, context)
-
-        if not isinstance(patch, Patch):
-            raise TypeError(
-                f"{self.agent_name} must return Patch object"
+        # Start OTEL span if available
+        otel = context.otel
+        span = None
+        if otel and otel.enabled:
+            from observability.otel_tracer import SpanNames, SpanAttributes
+            span = otel.start_span(
+                name=SpanNames.agent(self.agent_name),
+                attributes=SpanAttributes.create_agent_attributes(
+                    agent_name=self.agent_name,
+                    tenant_id=context.tenant_id,
+                    session_id=context.session_id
+                )
             )
+        else:
+            from contextlib import nullcontext
+            span = nullcontext()
 
-        self._validate_patch_integrity(patch)
+        with span:
+            start_time = time.time()
 
-        execution_time_ms = int((time.time() - start_time) * 1000)
+            try:
+                patch = self._run(state, context)
 
-        # Inject mandatory metadata
-        from models.patch import PatchMetadata
+                if not isinstance(patch, Patch):
+                    raise TypeError(
+                        f"{self.agent_name} must return Patch object"
+                    )
 
-        metadata = PatchMetadata(
-            execution_time_ms=execution_time_ms,
-            config_version=context.config_version,
-            prompt_version=context.prompt_version,
-            trace_id=context.trace_id,
-            request_id=context.request_id,
-            session_id=context.session_id,
-        )
-        patch.metadata = metadata
+                self._validate_patch_integrity(patch)
 
-        # Structured logging
-        self._log_execution(context, patch)
+                execution_time_ms = int((time.time() - start_time) * 1000)
+                execution_time_seconds = (time.time() - start_time)
 
-        return patch
+                # Inject mandatory metadata
+                from models.patch import PatchMetadata
+
+                metadata = PatchMetadata(
+                    execution_time_ms=execution_time_ms,
+                    config_version=context.config_version,
+                    prompt_version=context.prompt_version,
+                    trace_id=context.trace_id,
+                    request_id=context.request_id,
+                    session_id=context.session_id,
+                )
+                patch.metadata = metadata
+
+                # Record metrics
+                metrics = context.metrics
+                if metrics and metrics.enabled:
+                    metrics.record_agent_execution(
+                        agent_name=self.agent_name,
+                        tenant_id=context.tenant_id,
+                        status="success",
+                        latency_seconds=execution_time_seconds,
+                        confidence=patch.confidence
+                    )
+
+                # Add OTEL event
+                if otel and otel.enabled:
+                    otel.add_event(
+                        "agent_execution_success",
+                        {
+                            "confidence": patch.confidence,
+                            "target_section": patch.target_section,
+                            "execution_time_ms": execution_time_ms
+                        }
+                    )
+
+                # Structured logging
+                self._log_execution(context, patch)
+
+                return patch
+
+            except Exception as e:
+                # Record error metrics
+                metrics = context.metrics
+                if metrics and metrics.enabled:
+                    execution_time_seconds = (time.time() - start_time)
+                    metrics.record_agent_execution(
+                        agent_name=self.agent_name,
+                        tenant_id=context.tenant_id,
+                        status="error",
+                        latency_seconds=execution_time_seconds
+                    )
+
+                # Re-raise - OTEL span will record exception
+                raise
 
     # -----------------------------------------------------
     # ABSTRACT BUSINESS LOGIC

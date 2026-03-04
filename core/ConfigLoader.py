@@ -148,6 +148,10 @@ class ConfigLoader:
     # Observability Config
     # -----------------------------------------------------
 
+    def is_observability_enabled(self):
+        """Check if observability is enabled."""
+        return self._config.get("observability", {}).get("enabled", True)
+
     def get_observability_config(self):
         """Get full observability configuration."""
         return self._config.get("observability", {})
@@ -160,9 +164,29 @@ class ConfigLoader:
         """Get Langfuse configuration."""
         return self._config.get("observability", {}).get("langfuse", {})
 
+    def get_metrics_config(self):
+        """Get Prometheus metrics configuration."""
+        return self._config.get("observability", {}).get("metrics", {})
+
+    def is_metrics_enabled(self):
+        """Check if metrics collection is enabled."""
+        return self._config.get("observability", {}).get("metrics", {}).get("enabled", True)
+
+    def is_otel_enabled(self):
+        """Check if OpenTelemetry tracing is enabled."""
+        return self._config.get("observability", {}).get("otel", {}).get("enabled", True)
+
+    def is_langfuse_enabled(self):
+        """Check if Langfuse tracing is enabled."""
+        return self._config.get("observability", {}).get("langfuse", {}).get("enabled", True)
+
     def get_logging_config(self):
         """Get logging configuration."""
         return self._config.get("observability", {}).get("logging", {})
+
+    def is_debug_mode(self):
+        """Check if debug mode is enabled."""
+        return self._config.get("observability", {}).get("debug", False)
 
     # -----------------------------------------------------
     # Escalation Config

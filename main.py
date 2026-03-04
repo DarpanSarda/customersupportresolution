@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.chat import router as chat_router
+from routes.observability import router as observability_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -18,16 +19,9 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-
-
 # Register routes
-app.include_router(chat_router)
-
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    """Health check endpoint to verify API is running"""
-    return {"status": "healthy", "message": "Customer Support Resolution API is running"}
+app.include_router(chat_router, tags=["chat"])
+app.include_router(observability_router, tags=["observability"])
 
 # Root endpoint
 @app.get("/")
@@ -37,7 +31,9 @@ async def root():
         "message": "Welcome to Customer Support Resolution API",
         "version": "1.0.0",
         "endpoints": {
+            "chat": "/chat",
             "health": "/health",
+            "metrics": "/metrics",
             "docs": "/docs",
             "redoc": "/redoc"
         }

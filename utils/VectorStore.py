@@ -116,7 +116,7 @@ class QdrantVectorStore(VectorStore):
 
     def __init__(
         self,
-        url: str = "http://localhost:6333",
+        url: str = "http://103.180.31.44:8082",
         api_key: Optional[str] = None,
         timeout: int = 60,
         prefer_grpc: bool = False
@@ -151,7 +151,8 @@ class QdrantVectorStore(VectorStore):
                 url=self._url,
                 api_key=self._api_key,
                 timeout=self._timeout,
-                prefer_grpc=self._prefer_grpc
+                prefer_grpc=self._prefer_grpc,
+                check_compatibility=False
             )
 
             logger.info(f"Connected to Qdrant at {self._url}")
@@ -257,14 +258,14 @@ class QdrantVectorStore(VectorStore):
             ]
             search_filter = Filter(must=conditions)
 
-        # Search
-        results = self.client.search(
+        # Search - use query_points for newer qdrant-client versions
+        results = self.client.query_points(
             collection_name=collection_name,
-            query_vector=query_embedding,
+            query=query_embedding,
             limit=top_k,
             query_filter=search_filter,
             score_threshold=score_threshold
-        )
+        ).points
 
         # Convert to SearchResult format
         return [
@@ -272,7 +273,7 @@ class QdrantVectorStore(VectorStore):
                 content=result.payload.get("content", ""),
                 doc_id=str(result.id),
                 metadata={k: v for k, v in result.payload.items() if k != "content"},
-                score=result.score,
+                score=result.score if hasattr(result, 'score') else 0.0,
                 payload=result.payload
             )
             for result in results
