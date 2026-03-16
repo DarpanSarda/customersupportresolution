@@ -69,15 +69,10 @@ def _initialize_rag_collections(qdrant_store, embeddings_config, tenant_id: str 
                 distance=Distance.COSINE
             )
         )
-        print(f"Created collection: {stage_1_col}")
     except UnexpectedResponse as e:
         # Collection already exists (status code 409 = Conflict)
-        if e.status_code == 409:
-            print(f"Collection already exists: {stage_1_col}")
-        else:
+        if e.status_code != 409:
             raise
-    except Exception as e:
-        print(f"Error creating collection {stage_1_col}: {e}")
 
     # Create stage_2 collection if not exists
     try:
@@ -88,15 +83,10 @@ def _initialize_rag_collections(qdrant_store, embeddings_config, tenant_id: str 
                 distance=Distance.COSINE
             )
         )
-        print(f"Created collection: {stage_2_col}")
     except UnexpectedResponse as e:
         # Collection already exists (status code 409 = Conflict)
-        if e.status_code == 409:
-            print(f"Collection already exists: {stage_2_col}")
-        else:
+        if e.status_code != 409:
             raise
-    except Exception as e:
-        print(f"Error creating collection {stage_2_col}: {e}")
 
 
 class SystemContainer:
@@ -104,7 +94,7 @@ class SystemContainer:
     Holds fully wired system components.
     """
 
-    def __init__(self, graph_engine, orchestrator, state_manager, config_loader, tool_registry, logger=None, tracing_context=None):
+    def __init__(self, graph_engine, orchestrator, state_manager, config_loader, tool_registry, logger=None, tracing_context=None, vector_store=None):
         self.graph_engine = graph_engine
         self.orchestrator = orchestrator
         self.state_manager = state_manager
@@ -112,6 +102,7 @@ class SystemContainer:
         self.tool_registry = tool_registry
         self.logger = logger
         self.tracing_context = tracing_context
+        self.vector_store = vector_store
 
 
 def bootstrap_system(config: dict) -> SystemContainer:
@@ -165,16 +156,6 @@ def bootstrap_system(config: dict) -> SystemContainer:
                 prefer_grpc=vs_config.get("prefer_grpc", False)
             )
             vector_store = CascadeVectorStore(vector_store=qdrant_store)
-
-            # Initialize empty collections for cascade retrieval
-            # Create for common tenant IDs
-            tenant_ids = ["default", "test", "amazon", "flipkart", "shopify"]
-            for tenant_id in tenant_ids:
-                _initialize_rag_collections(
-                    qdrant_store,
-                    config_loader.get_embeddings_config(),
-                    tenant_id=tenant_id
-                )
 
         # Initialize reranker if enabled
         if config_loader.is_reranker_enabled():
@@ -404,5 +385,6 @@ def bootstrap_system(config: dict) -> SystemContainer:
         config_loader=config_loader,
         tool_registry=tool_registry,
         logger=structured_logger,
-        tracing_context=tracing_context
+        tracing_context=tracing_context,
+        vector_store=vector_store
     )

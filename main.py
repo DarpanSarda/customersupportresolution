@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.chat import router as chat_router
 from routes.observability import router as observability_router
+from routes.faq import router as faq_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -22,6 +23,7 @@ app.add_middleware(
 # Register routes
 app.include_router(chat_router, tags=["chat"])
 app.include_router(observability_router, tags=["observability"])
+app.include_router(faq_router, tags=["faq"])
 
 # Root endpoint
 @app.get("/")
@@ -34,6 +36,7 @@ async def root():
             "chat": "/chat",
             "health": "/health",
             "metrics": "/metrics",
+            "faq": "/faq",
             "docs": "/docs",
             "redoc": "/redoc"
         }
