@@ -1,61 +1,136 @@
-"""LLM client factory for creating provider instances."""
+"""
+LLMFactory - Dynamic registry-based factory for LLM managers.
 
-from llms.clients.GroqClient import GroqClient
-from llms.clients.OpenRouterClient import OpenRouterClient
-from llms.LLMManager import LLMManager
+Managers self-register using the @register_manager decorator.
+The factory creates instances without any hardcoded provider logic.
+"""
+
+from typing import Dict, Type
+from llms.BaseLLM import BaseLLM, LLMConfig
+
+
+# Internal registry for all LLM managers
+# Managers self-register via the register_manager decorator
+_manager_registry: Dict[str, Type[BaseLLM]] = {}
+
+
+def register_manager(name: str):
+    """
+    Decorator for LLM managers to self-register.
+
+    Usage in manager class:
+        @register_manager("openai")
+        class OpenAIManager(BaseLLM):
+            ...
+
+    Args:
+        name: Provider name (e.g., "openai", "claude", "groq")
+
+    Returns:
+        Decorator function that registers the class
+    """
+    def decorator(cls: Type[BaseLLM]) -> Type[BaseLLM]:
+        _manager_registry[name.lower()] = cls
+        return cls
+    return decorator
+
+
+def list_registered_managers() -> list:
+    """
+    Get list of all registered manager names.
+
+    Returns:
+        List of registered provider names (lowercase)
+    """
+    return list(_manager_registry.keys())
+
+
+def is_manager_registered(provider: str) -> bool:
+    """
+    Check if a provider is registered.
+
+    Args:
+        provider: Provider name to check
+
+    Returns:
+        True if provider is registered, False otherwise
+    """
+    return provider.lower() in _manager_registry
 
 
 class LLMFactory:
-    """Factory for creating LLM client instances."""
+    """
+    Dynamic factory for creating LLM manager instances.
 
-    _clients = {
-        "groq": GroqClient,
-        "openrouter": OpenRouterClient,
-    }
+    Uses the internal registry to create instances without hardcoding
+    any provider logic. New providers can be added by creating a new
+    manager class with @register_manager decorator.
+    """
 
-    @classmethod
-    def create(cls, provider: str | dict, **kwargs) -> "LLMManager":
-        """Create an LLM client instance.
+    @staticmethod
+    def create(provider: str, config: LLMConfig) -> BaseLLM:
+        """
+        Create an LLM manager instance for the specified provider.
 
         Args:
-            provider: Provider name (groq, openrouter) or config dict with 'provider' key
-            **kwargs: Additional arguments to pass to client constructor
+            provider: Provider name (e.g., "openai", "claude", "groq")
+            config: LLMConfig instance with provider settings
 
         Returns:
-            LLM client instance
+            Instance of the appropriate LLM manager
 
         Raises:
             ValueError: If provider is not registered
         """
-        # Handle dict config
-        if isinstance(provider, dict):
-            provider_name = provider.get("provider")
-            if not provider_name:
-                raise ValueError("Config dict must contain 'provider' key")
-            # Merge dict config with kwargs (kwargs takes precedence)
-            config_kwargs = {k: v for k, v in provider.items() if k != "provider"}
-            config_kwargs.update(kwargs)
-            kwargs = config_kwargs
-        else:
-            provider_name = provider
+        provider_key = provider.lower()
 
-        provider_lower = provider_name.lower()
-
-        if provider_lower not in cls._clients:
+        if provider_key not in _manager_registry:
+            registered = list_registered_managers()
             raise ValueError(
-                f"Unknown provider: {provider_name}. "
-                f"Available: {list(cls._clients.keys())}"
+                f"Unknown LLM provider: '{provider}'. "
+                f"Registered providers: {registered}"
             )
 
-        client_class = cls._clients[provider_lower]
-        return client_class(**kwargs)
+        manager_class = _manager_registry[provider_key]
+        return manager_class(config)
 
-    @classmethod
-    def register(cls, name: str, client_class: type):
-        """Register a new LLM client.
+    @staticmethod
+    def create_from_dict(config_dict: Dict) -> BaseLLM:
+        """
+        Create an LLM manager from a configuration dictionary.
 
         Args:
-            name: Provider name
-            client_class: LLM client class
+            config_dict: Dictionary with LLM configuration including:
+                - provider: str
+                - api_key: str
+                - model: str
+                - temperature: float (optional)
+                - max_tokens: int (optional)
+                - ... other LLMConfig fields
+
+        Returns:
+            Instance of the appropriate LLM manager
+
+        Raises:
+            ValueError: If provider is not registered or required fields missing
         """
-        cls._clients[name.lower()] = client_class
+        required_fields = ["provider", "api_key", "model"]
+        for field in required_fields:
+            if field not in config_dict:
+                raise ValueError(f"Missing required config field: '{field}'")
+
+        config = LLMConfig(**config_dict)
+        return LLMFactory.create(config.provider, config)
+
+    @staticmethod
+    def get_registry_info() -> Dict[str, str]:
+        """
+        Get information about all registered managers.
+
+        Returns:
+            Dictionary mapping provider names to their class names
+        """
+        return {
+            name: cls.__name__
+            for name, cls in _manager_registry.items()
+        }
