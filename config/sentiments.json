@@ -1,0 +1,35 @@
+{
+  "sentiments": [
+    {
+      "sentiment_label": "angry",
+      "escalation_threshold": 0.8,
+      "response_guideline": "Immediately escalate to human agent. Be empathetic but do not attempt to resolve autonomously."
+    },
+    {
+      "sentiment_label": "frustrated",
+      "escalation_threshold": 0.6,
+      "response_guideline": "Attempt resolution but offer escalation option. Be patient and understanding."
+    },
+    {
+      "sentiment_label": "neutral",
+      "escalation_threshold": null,
+      "response_guideline": "Provide standard assistance. Monitor for sentiment changes."
+    },
+    {
+      "sentiment_label": "positive",
+      "escalation_threshold": null,
+      "response_guideline": "Acknowledge and thank the customer. Provide friendly assistance."
+    }
+  ],
+  "escalation_rules": {
+    "immediate_escalation": {
+      "toxicity_flag": true,
+      "urgency_score_above": 0.9,
+      "sentiment": "angry"
+    },
+    "offer_escalation": {
+      "urgency_score_above": 0.7,
+      "sentiment": ["frustrated", "angry"]
+    }
+  }
+}

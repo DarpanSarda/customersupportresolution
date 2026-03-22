@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from routes.chat import router as chat_router
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -18,6 +19,7 @@ app.add_middleware(
 )
 
 # Register routes
+app.include_router(chat_router, tags=["chat"])
 
 # Root endpoint
 @app.get("/")
@@ -25,5 +27,12 @@ async def root():
     """Root endpoint"""
     return {
         "message": "Welcome to Customer Support Resolution API",
+        "version": "1.0.0",
+        "endpoints": {
+            "chat": "/chat",
+            "health": "/chat/health",
+            "docs": "/docs",
+            "redoc": "/redoc"
+        }
     }
 

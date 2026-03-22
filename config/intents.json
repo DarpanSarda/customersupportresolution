@@ -1,0 +1,116 @@
+{
+  "intents": [
+    {
+      "label": "GREETING",
+      "name": "GREETING",
+      "intent_label": "GREETING",
+      "description": "User is greeting or saying hello",
+      "confidence_threshold": 0.7,
+      "tool_mapping": null,
+      "examples": [
+        "Hello",
+        "Hi there",
+        "Hey",
+        "Good morning",
+        "Good afternoon"
+      ]
+    },
+    {
+      "label": "FAQ_QUERY",
+      "name": "FAQ_QUERY",
+      "intent_label": "FAQ_QUERY",
+      "description": "User is asking a frequently asked question",
+      "confidence_threshold": 0.7,
+      "tool_mapping": "faq_lookup",
+      "examples": [
+        "What are your business hours?",
+        "How do I reset my password?",
+        "What's your return policy?",
+        "Where can I find my order?"
+      ]
+    },
+    {
+      "label": "ORDER_STATUS",
+      "name": "ORDER_STATUS",
+      "intent_label": "ORDER_STATUS",
+      "description": "User wants to check the status of their order",
+      "confidence_threshold": 0.7,
+      "tool_mapping": "order_status",
+      "examples": [
+        "Where is my order?",
+        "Check order status",
+        "Track my package",
+        "What's the status of order #12345?"
+      ]
+    },
+    {
+      "label": "REFUND_REQUEST",
+      "name": "REFUND_REQUEST",
+      "intent_label": "REFUND_REQUEST",
+      "description": "User wants to request a refund",
+      "confidence_threshold": 0.7,
+      "tool_mapping": "refund",
+      "examples": [
+        "I want a refund",
+        "Can I get my money back?",
+        "Refund my order",
+        "How do I request a refund?"
+      ]
+    },
+    {
+      "label": "COMPLAINT",
+      "name": "COMPLAINT",
+      "intent_label": "COMPLAINT",
+      "description": "User has a complaint or issue",
+      "confidence_threshold": 0.7,
+      "tool_mapping": "ticket_creation",
+      "examples": [
+        "I'm not happy with my order",
+        "This is terrible service",
+        "I have a complaint",
+        "My product arrived damaged"
+      ]
+    },
+    {
+      "label": "SUPPORT_REQUEST",
+      "name": "SUPPORT_REQUEST",
+      "intent_label": "SUPPORT_REQUEST",
+      "description": "User needs help or support",
+      "confidence_threshold": 0.7,
+      "tool_mapping": "ticket_creation",
+      "examples": [
+        "I need help",
+        "Can you assist me?",
+        "Support please",
+        "I have a problem"
+      ]
+    },
+    {
+      "label": "GENERAL_QUERY",
+      "name": "GENERAL_QUERY",
+      "intent_label": "GENERAL_QUERY",
+      "description": "User has a general question or query",
+      "confidence_threshold": 0.6,
+      "tool_mapping": null,
+      "examples": [
+        "I have a question",
+        "Can you help me with something?",
+        "I was wondering..."
+      ]
+    },
+    {
+      "label": "GOODBYE",
+      "name": "GOODBYE",
+      "intent_label": "GOODBYE",
+      "description": "User is saying goodbye or ending the conversation",
+      "confidence_threshold": 0.7,
+      "tool_mapping": null,
+      "examples": [
+        "Bye",
+        "Goodbye",
+        "See you later",
+        "Thanks, bye"
+      ]
+    }
+  ]
+}

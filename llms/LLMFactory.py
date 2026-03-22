@@ -134,3 +134,13 @@ class LLMFactory:
             name: cls.__name__
             for name, cls in _manager_registry.items()
         }
+
+
+# Import all managers at the end to trigger self-registration
+# This must happen AFTER register_manager and the registry are defined
+# to avoid circular import issues
+from llms.managers.ClaudeManager import ClaudeManager  # noqa: F401
+from llms.managers.GeminiManager import GeminiManager  # noqa: F401
+from llms.managers.AzureOpenAIManager import AzureOpenAIManager  # noqa: F401
+from llms.managers.OpenAIManager import OpenAIManager  # noqa: F401
+from llms.managers.OpenAICompatibleManager import OpenAICompatibleManager  # noqa: F401

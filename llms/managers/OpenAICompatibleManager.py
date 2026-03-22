@@ -15,8 +15,8 @@ from typing import Dict, List, Optional, Any, AsyncIterator
 from llms.BaseLLM import BaseLLM, LLMConfig, LLMResponse
 
 # Base URLs for popular OpenAI-compatible providers
+# Note: "openai" is NOT included here - use OpenAIManager for actual OpenAI API
 PROVIDER_BASE_URLS = {
-    "openai": None,  # OpenAI's default (no base_url needed)
     "groq": "https://api.groq.com/openai/v1",
     "openrouter": "https://openrouter.ai/api/v1",
     "deepseek": "https://api.deepseek.com",
@@ -125,9 +125,8 @@ class OpenAICompatibleManager(BaseLLM):
         if not self.config.api_key:
             raise ValueError(f"{self.config.provider} API key is required")
 
-        # Validate OpenAI key format for openai provider
-        if self.config.provider == "openai" and not self.config.api_key.startswith("sk-"):
-            raise ValueError("Invalid OpenAI API key format (should start with 'sk-')")
+        # No key format validation for OpenAI-compatible providers
+        # They each have their own key formats (gsk_, sk-or-, etc.)
 
     async def _initialize_client(self):
         """Lazy initialize the OpenAI client."""
@@ -306,3 +305,7 @@ class OpenAICompatibleManager(BaseLLM):
 
 # Auto-register all providers on import
 OpenAICompatibleManager.register_all_providers()
+
+# Also register the base class as "openai-compatible" for generic usage
+from llms.LLMFactory import _manager_registry
+_manager_registry["openai-compatible"] = OpenAICompatibleManager
