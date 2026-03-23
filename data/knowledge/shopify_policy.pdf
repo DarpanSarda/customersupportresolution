@@ -1,0 +1,169 @@
+SHOPIFY MERCHANT SUPPORT POLICY
+
+Table of Contents
+1. Account Management
+2. Store Configuration
+3. Payment Processing
+4. Shipping Settings
+5. Product Management
+6. Order Fulfillment
+7. Customer Support Tools
+
+====================================================================
+1. ACCOUNT MANAGEMENT
+====================================================================
+
+CHANGING STORE OWNER
+To transfer store ownership:
+1. Go to Settings > Account
+2. Click "Change store owner"
+3. Enter new owner's email
+4. New owner must accept within 7 days
+5. All permissions transfer automatically
+
+ADDING STAFF MEMBERS
+You can add staff with different permission levels:
+- Full access: Can access everything
+- Limited access: Restricted to specific areas
+- View only: Can view but not edit
+
+To add staff:
+1. Go to Settings > Account > Staff
+2. Click "Add staff member"
+3. Enter email and set permissions
+4. Staff member receives invitation email
+
+====================================================================
+2. STORE CONFIGURATION
+====================================================================
+
+CUSTOMIZING YOUR THEME
+To customize your store's appearance:
+1. Go to Online Store > Themes
+2. Click "Customize" on your active theme
+3. Use the theme editor to modify:
+   - Colors and fonts
+   - Layout and sections
+   - Navigation menus
+   - Product pages
+4. Preview changes before publishing
+
+ADDING A CUSTOM DOMAIN
+To use your own domain:
+1. Go to Settings > Domains
+2. Click "Add new domain"
+3. Enter your domain name
+4. Follow the DNS setup instructions
+5. SSL certificate is automatically configured
+
+====================================================================
+3. PAYMENT PROCESSING
+====================================================================
+
+SUPPORTED PAYMENT GATEWAYS
+Shopify supports:
+- Shopify Payments (Stripe)
+- PayPal
+- Square
+- Authorize.net
+- And 100+ other gateways
+
+SETTING UP SHOPIFY PAYMENTS
+1. Go to Settings > Payments
+2. Complete business information
+3. Verify your identity
+4. Set up payout destination
+5. Payments are settled within 2-3 business days
+
+TRANSACTION FEES
+- Shopify Payments: No transaction fee
+- Third-party gateways: 0.5%-2% fee based on plan
+- No fee on Shopify Advanced plan
+
+====================================================================
+4. SHIPPING SETTINGS
+====================================================================
+
+CREATING SHIPPING ZONES
+1. Go to Settings > Shipping
+2. Click "Add shipping zone"
+3. Select countries for the zone
+4. Set rates based on:
+   - Weight
+   - Price
+   - Flat rate
+   - Free shipping over certain amount
+
+SHIPPING CARRIERS INTEGRATION
+Integrated carriers include:
+- USPS
+- UPS
+- DHL Express
+- Canada Post
+- Sendle
+
+Rates are calculated automatically at checkout.
+
+====================================================================
+5. PRODUCT MANAGEMENT
+====================================================================
+
+ADDING PRODUCTS
+To add a new product:
+1. Go to Products > Add product
+2. Enter product details:
+   - Title and description
+   - Images and videos
+   - Price and compare-at price
+   - SKU and barcode
+   - Inventory tracking
+   - Shipping options
+3. Organize into collections
+4. Set SEO properties
+
+INVENTORY MANAGEMENT
+Shopify tracks inventory when:
+- Products are sold
+- Orders are fulfilled
+- Returns are processed
+- Manual adjustments are made
+
+Low stock alerts can be configured in Settings > Inventory.
+
+====================================================================
+6. ORDER FULFILLMENT
+====================================================================
+
+FULFILLMENT OPTIONS
+- Fulfill manually: Mark as fulfilled when shipped
+- Bulk fulfillment: Fulfill multiple orders at once
+- Automatic fulfillment: For digital products
+- Third-party fulfillment: Connect to fulfillment service
+
+PRINTING SHIPPING LABELS
+1. Go to Orders page
+2. Select orders to fulfill
+3. Click "Create shipping label"
+4. Select carrier and service
+5. Buy and print label
+
+====================================================================
+7. CUSTOMER SUPPORT TOOLS
+====================================================================
+
+RESPONDING TO CUSTOMER INQUIRIES
+All customer messages appear in:
+- Inbox > Customers section
+- Notifications menu
+
+Best practices:
+- Respond within 24 hours
+- Use saved replies for common questions
+- Set up automatic responses
+
+HANDLING REFUND REQUESTS
+1. Go to Orders > Select order
+2. Click "Refund"
+3. Select items to refund
+4. Choose refund amount
+5. Send refund confirmation to customer

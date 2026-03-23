@@ -1,0 +1,187 @@
+{
+  "tenant_id": "amazon",
+  "faqs": [
+    {
+      "question": "Where is my Amazon order?",
+      "answer": "To track your Amazon order, go to 'Your Orders' in Your Account. You can find the tracking number and delivery status there. You'll also receive email updates when your order ships and is out for delivery.",
+      "category": "Order Status",
+      "keywords": ["track", "tracking", "where", "order", "package", "delivery status", "shipment"],
+      "priority": "high"
+    },
+    {
+      "question": "How do I return an item on Amazon?",
+      "answer": "Go to 'Your Orders', find the item you want to return, and select 'Return or replace items'. Select the reason for return, choose your preferred refund method, and print the return label. Pack the item and drop it off at the designated location. Refunds are typically processed within 3-5 business days after we receive your return.",
+      "category": "Returns",
+      "keywords": ["return", "refund", "send back", "exchange", "replace", "return label"],
+      "priority": "high"
+    },
+    {
+      "question": "What is Amazon Prime and how do I sign up?",
+      "answer": "Amazon Prime is a membership program that offers free two-day shipping, same-day delivery in some areas, Prime Video, Prime Music, Prime Reading, and more. You can sign up for a free 30-day trial at amazon.com/prime. After the trial, membership is $14.99/month or $139/year. You can cancel anytime.",
+      "category": "Prime Membership",
+      "keywords": ["prime", "membership", "sign up", "subscribe", "free trial", "benefits"],
+      "priority": "medium"
+    },
+    {
+      "question": "How do I cancel my Amazon Prime membership?",
+      "answer": "Go to 'Your Account' and select 'Prime Membership'. Click on 'Update, cancel, and more' and then 'End membership'. You'll continue to receive Prime benefits until the end of the current billing period. You can also contact customer service for assistance.",
+      "category": "Prime Membership",
+      "keywords": ["cancel", "end", "terminate", "prime", "membership"],
+      "priority": "medium"
+    },
+    {
+      "question": "Why is my Amazon order delayed?",
+      "answer": "Order delays can happen due to weather events, carrier issues, high volume periods, or address problems. Check your tracking for the latest updates. If your guaranteed delivery date has passed, you may be eligible for a refund of shipping charges or a promotional credit.",
+      "category": "Shipping",
+      "keywords": ["delayed", "late", "delivery date", "shipping delay", "when will it arrive"],
+      "priority": "high"
+    },
+    {
+      "question": "How do I change my shipping address after placing an order?",
+      "answer": "Once an order ships, the address cannot be changed. Go to 'Your Orders' and select 'Change shipping address' if the order hasn't shipped yet. If it has shipped, you may need to contact the carrier or wait for delivery and then return the item if undeliverable.",
+      "category": "Shipping",
+      "keywords": ["change address", "wrong address", "update address", "shipping address", "move"],
+      "priority": "high"
+    },
+    {
+      "question": "How do I contact Amazon customer service?",
+      "answer": "You can contact Amazon customer service through: 1) Call 1-888-280-4331 (24/7), 2) Use the 'Customer Service' button in Your Account on the website or app, 3) Use Amazon's live chat feature, or 4) Email through the Contact Us form. Have your order number ready for faster service.",
+      "category": "Contact",
+      "keywords": ["contact", "call", "phone", "support", "help", "customer service", "speak to person"],
+      "priority": "high"
+    },
+    {
+      "question": "How do I reset my Amazon password?",
+      "answer": "Go to the Amazon sign-in page and click 'Forgot your password?' Enter the email or phone number associated with your account. You'll receive a One-Time Password (OTP) to verify your identity. Then create a new password. If you don't receive the OTP, check your spam folder or try again.",
+      "category": "Account Security",
+      "keywords": ["password", "reset", "forgot password", "login", "can't sign in", "account access"],
+      "priority": "high"
+    },
+    {
+      "question": "What payment methods does Amazon accept?",
+      "answer": "Amazon accepts: Credit and debit cards (Visa, Mastercard, American Express, Discover), Amazon Store Card, Amazon Secured Card, Amazon Gift Cards, checking/savings accounts (ACH), and services like PayPal (for eligible purchases). EBT is accepted for grocery items in select regions.",
+      "category": "Payment",
+      "keywords": ["payment", "credit card", "debit card", "pay", "paypal", "gift card", "methods"],
+      "priority": "medium"
+    },
+    {
+      "question": "How do I apply a promo code on Amazon?",
+      "answer": "Add items to your cart and proceed to checkout. On the checkout page, enter your promo code in the 'Gift cards & promotional codes' box and click 'Apply'. The discount will be reflected in your order total. Note that some promo codes are automatically applied and don't need to be entered manually.",
+      "category": "Payment",
+      "keywords": ["promo code", "coupon", "discount", "voucher", "promo", "code"],
+      "priority": "medium"
+    },
+    {
+      "question": "How do I track a package from a third-party seller?",
+      "answer": "Third-party seller orders can be tracked in 'Your Orders' just like Amazon orders. The seller will provide tracking information once they ship. Some sellers use their own shipping methods. If tracking isn't available after 3 days, contact the seller through 'Contact Seller' in Your Orders.",
+      "category": "Order Status",
+      "keywords": ["third party", "seller", "marketplace", "tracking", "track seller order"],
+      "priority": "medium"
+    },
+    {
+      "question": "What is Amazon's return policy for electronics?",
+      "answer": "Most electronics can be returned within 30 days of delivery. Computers and Amazon-branded devices (Kindle, Fire, Echo) have a 30-day return window for a full refund. Open software, video games, and DVDs may only be exchanged for the same item. Some electronics have different return periods - check the product page for details.",
+      "category": "Returns",
+      "keywords": ["electronics", "return policy", "computer", "kindle", "fire", "echo", "30 days"],
+      "priority": "high"
+    },
+    {
+      "question": "How do I report a missing or lost package?",
+      "answer": "Go to 'Your Orders' and find the order. Select 'Track package' to see the delivery status. If it shows delivered but you didn't receive it, select 'Problem with order' > 'Package didn't arrive' > 'Request refund'. Amazon will investigate and may offer a refund or replacement. Provide details about where you were and any security camera footage if available.",
+      "category": "Shipping",
+      "keywords": ["missing", "lost", "stolen", "didn't arrive", "never received", "package lost"],
+      "priority": "high"
+    },
+    {
+      "question": "Can I get a refund for shipping if my order is late?",
+      "answer": "If your order has a guaranteed delivery date and doesn't arrive on time, you may be eligible for a refund of shipping charges. Go to 'Your Orders', select the order, and choose 'Problem with order' > 'Shipment is late'. You can request a refund of shipping fees or receive a promotional credit on future orders.",
+      "category": "Shipping",
+      "keywords": ["late", "refund shipping", "shipping refund", "guaranteed delivery", "delivery date"],
+      "priority": "medium"
+    },
+    {
+      "question": "How do I change or cancel an order?",
+      "answer": "Go to 'Your Orders' and find the order you want to change. Select 'Cancel items' if you want to cancel. For changes, you may need to cancel and reorder. Orders can only be canceled before they ship. Once shipped, you'll need to wait for delivery and then return the item for a refund.",
+      "category": "Orders",
+      "keywords": ["cancel", "change", "modify", "edit order", "cancel order"],
+      "priority": "high"
+    },
+    {
+      "question": "What is Amazon's price adjustment policy?",
+      "answer": "Amazon doesn't offer price matching after purchase. However, if the price drops within 7 days of delivery for TV purchases, you may request a refund of the difference. For other items, you can return and repurchase if the new price is significantly lower, though this isn't guaranteed.",
+      "category": "Pricing",
+      "keywords": ["price match", "adjustment", "price drop", "refund difference", "lower price"],
+      "priority": "low"
+    },
+    {
+      "question": "How do I leave a product review on Amazon?",
+      "answer": "Go to 'Your Orders', find the item, and click 'Write a product review' under the order. You can rate the item from 1-5 stars and add text, photos, or video. Reviews must be within 30 days of delivery and can only be posted for items you actually purchased. You can edit your review within 30 days of posting.",
+      "category": "Account",
+      "keywords": ["review", "rating", "feedback", "write review", "product review"],
+      "priority": "low"
+    },
+    {
+      "question": "How do I use an Amazon Gift Card?",
+      "answer": "To redeem an Amazon Gift Card, go to 'Your Account' > 'Gift cards' > 'Redeem a Gift Card'. Enter the claim code on the back of the card. The balance will be added to your account and applied to your next purchase. Gift card balances don't expire and can be combined with other payment methods.",
+      "category": "Payment",
+      "keywords": ["gift card", "redeem", "claim code", "balance", "voucher", "amazon card"],
+      "priority": "medium"
+    },
+    {
+      "question": "What is Amazon Fresh and how does it work?",
+      "answer": "Amazon Fresh is a grocery delivery service available to Prime members in select areas. Order groceries online and choose same-day or next-day delivery windows. There's a $15 service fee for orders under $35, free for orders over $35. You can also pick up orders at Amazon Fresh lockers for no fee. Available in major cities only.",
+      "category": "Services",
+      "keywords": ["fresh", "grocery", "groceries", "delivery", "food", "produce"],
+      "priority": "low"
+    },
+    {
+      "question": "How do I report a damaged or defective item?",
+      "answer": "Go to 'Your Orders', find the order, and select 'Problem with order'. Choose 'Item arrived damaged/defective' and select whether you want a refund or replacement. You may be asked to provide photos of the damage. Amazon will send a replacement or issue a refund, usually without requiring you to return the damaged item.",
+      "category": "Returns",
+      "keywords": ["damaged", "defective", "broken", "arrived broken", "quality issue", "replacement"],
+      "priority": "high"
+    },
+    {
+      "question": "What is Amazon's policy on counterfeit products?",
+      "answer": "Amazon has zero tolerance for counterfeit products. If you receive a fake item, you're entitled to a full refund and can keep the item (Amazon will destroy it). Report the issue in 'Your Orders' by selecting 'Problem with order' > 'Item is counterfeit'. Amazon investigates sellers and removes those who violate policies.",
+      "category": "Safety",
+      "keywords": ["fake", "counterfeit", "inauthentic", "not real", "fake product"],
+      "priority": "high"
+    },
+    {
+      "question": "How do I set up an Amazon Household?",
+      "answer": "Amazon Household allows two adults and up to four children to share Prime benefits and digital content. Go to 'Your Account' > 'Your Amazon Household' and invite another adult via email. Adults share payment methods and can manage teen approvals. Child profiles have parental controls for age-appropriate content.",
+      "category": "Account",
+      "keywords": ["household", "family", "share prime", "share account", "family plan"],
+      "priority": "medium"
+    },
+    {
+      "question": "What is Amazon Locker and how do I use it?",
+      "answer": "Amazon Lockers are secure self-service pickup locations. During checkout, search for a nearby Amazon Locker and select it as your delivery address. You'll receive a code when your package arrives. Enter the code at the locker to retrieve your package. Packages are held for 3 business days. This is a free delivery option for most items.",
+      "category": "Shipping",
+      "keywords": ["locker", "pickup", "amazon locker", "pickup location"],
+      "priority": "medium"
+    },
+    {
+      "question": "How do I unsubscribe from Amazon marketing emails?",
+      "answer": "Scroll to the bottom of any Amazon marketing email and click 'Unsubscribe'. Alternatively, go to 'Your Account' > 'Communication preferences' > 'Promotional emails'. You can choose which types of emails to receive or opt out entirely. Transactional emails (order confirmations) cannot be disabled.",
+      "category": "Account",
+      "keywords": ["unsubscribe", "emails", "spam", "marketing", "opt out"],
+      "priority": "low"
+    },
+    {
+      "question": "What is Amazon A-to-z Guarantee?",
+      "answer": "The Amazon A-to-z Guarantee protects buyers when they purchase from third-party sellers. If your item is damaged, defective, or different from the description, and the seller doesn't help, you can file an A-to-z Guarantee claim for a refund. You have 90 days from delivery to file. Go to 'Your Orders' > 'Problem with order' > 'Request refund under A-to-z Guarantee'.",
+      "category": "Buyer Protection",
+      "keywords": ["a to z", "guarantee", "protection", "buyer protection", "third party seller"],
+      "priority": "medium"
+    },
+    {
+      "question": "How do I close my Amazon account permanently?",
+      "answer": "To close your account, contact Amazon customer service and request account closure. You can also use the 'Close Your Account' button in Your Account under 'Account & Security'. All data, order history, and digital content will be permanently deleted. Outstanding balances must be paid before closing. You have 30 days to reconsider.",
+      "category": "Account",
+      "keywords": ["close account", "delete account", "terminate", "permanently close"],
+      "priority": "low"
+    }
+  ]
+}

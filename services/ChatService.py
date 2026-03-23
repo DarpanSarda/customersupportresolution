@@ -1,18 +1,19 @@
 """
 ChatService - Service for handling chat requests.
 
-Handles IntentAgent initialization, LLM client creation, and request processing.
+Handles Orchestrator initialization and request processing.
+Following the Agent Contract pattern with shared state management.
 """
 
 from fastapi import HTTPException
-from agents.IntentAgent import IntentAgent
-from agents.SentimentAgent import SentimentAgent
 from llms.BaseLLM import LLMConfig
 from llms.LLMFactory import LLMFactory
 from utils.DBManager import get_db_manager
 from services.ConfigService import ConfigService
 from utils.encryption import decrypt
 from schemas.chat import ChatRequest, ChatResponse
+from core.Orchestrator import Orchestrator, AgentFactory
+import os
 
 
 class ChatService:
@@ -124,118 +125,112 @@ class ChatService:
 
         return LLMFactory.create(actual_provider, config)
 
-    async def get_intent_agent(
-        self,
-        llm_client,
-        tenant_id: str
-    ) -> IntentAgent:
+    async def _create_agent_factory(self, llm_client) -> AgentFactory:
         """
-        Create and initialize IntentAgent.
+        Create AgentFactory for instantiating agents.
 
         Args:
             llm_client: LLM client instance
-            tenant_id: Tenant identifier
 
         Returns:
-            Initialized IntentAgent
-
-        Raises:
-            HTTPException: If prompt not configured
+            AgentFactory instance
         """
-        # Load prompt for IntentAgent
-        try:
-            prompt = await self.config_service.get_prompt(
-                agent_name="IntentAgent",
-                version="v1",
-                tenant_id=tenant_id
-            )
-        except ValueError as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"IntentAgent prompt not configured: {str(e)}"
-            )
-
-        # Initialize IntentAgent
-        return IntentAgent(
+        return AgentFactory(
             llm_client=llm_client,
-            system_prompt=prompt
+            config_service=self.config_service
         )
 
-    async def get_sentiment_agent(
-        self,
-        llm_client,
-        tenant_id: str
-    ) -> SentimentAgent:
+    async def _create_tool_registry(self):
         """
-        Create and initialize SentimentAgent.
-
-        Args:
-            llm_client: LLM client instance
-            tenant_id: Tenant identifier
+        Create ToolRegistry with available tools.
 
         Returns:
-            Initialized SentimentAgent
-
-        Raises:
-            HTTPException: If prompt not configured
+            ToolRegistry instance
         """
-        # Load prompt for SentimentAgent
-        try:
-            prompt = await self.config_service.get_prompt(
-                agent_name="SentimentAgent",
-                version="v1",
-                tenant_id=tenant_id
-            )
-        except ValueError as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"SentimentAgent prompt not configured: {str(e)}"
-            )
+        from core.ToolRegistry import ToolRegistry
+        from tools.FAQTool import FAQTool
+        from tools.ApiTool import ApiTool
+        from models.tool import ToolConfig as ToolConfigModel
 
-        # Initialize SentimentAgent
-        return SentimentAgent(
-            llm_client=llm_client,
-            system_prompt=prompt
+        # Create tool registry
+        registry = ToolRegistry()
+
+        # Register FAQTool
+        faq_tool = FAQTool()
+        print(f"[DEBUG] Creating FAQTool, name={faq_tool.get_name()}")
+        registry.register_base_tool(faq_tool)
+        print(f"[DEBUG] Registered tool: FAQTool with name={faq_tool.get_name()}")
+
+        # Register ApiTool with default config
+        api_tool_config = ToolConfigModel(
+            url="",
+            method="POST",
+            timeout_seconds=30,
+            retry_attempts=2,
+            headers={}
         )
+        api_tool = ApiTool(config=api_tool_config)
+        print(f"[DEBUG] Creating ApiTool, name={api_tool.get_name()}")
+        registry.register_base_tool(api_tool)
+        print(f"[DEBUG] Registered tool: ApiTool with name={api_tool.get_name()}")
 
-    async def get_available_intents(self, tenant_id: str):
+        # Set up agent permissions
+        # ResponseAgent can use FAQTool
+        registry.set_agent_permissions("ResponseAgent", ["FAQTool"])
+        print(f"[DEBUG] Set permissions for ResponseAgent: {registry.get_agent_tools('ResponseAgent')}")
+
+        # RAGRetrievalAgent can use FAQTool
+        registry.set_agent_permissions("RAGRetrievalAgent", ["FAQTool"])
+        print(f"[DEBUG] Set permissions for RAGRetrievalAgent: {registry.get_agent_tools('RAGRetrievalAgent')}")
+
+        print(f"[DEBUG] Tool registry created with {len(registry.list_tools())} tools")
+        print(f"[DEBUG] Available tools: {registry.list_tools()}")
+        print(f"[DEBUG] All permissions: {registry.get_permissions_info()}")
+
+        return registry
+
+    async def _get_orchestrator_config(self, tenant_id: str) -> dict:
         """
-        Load available intents for a tenant.
+        Get configuration for orchestrator.
 
         Args:
             tenant_id: Tenant identifier
 
         Returns:
-            List of IntentLabel objects
-
-        Raises:
-            HTTPException: If no intents configured
+            Configuration dict with intents, RAG settings, etc.
         """
         try:
-            return await self.config_service.get_intents(
-                tenant_id=tenant_id
-            )
-        except ValueError as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"No intents configured: {str(e)}"
-            )
+            intents = await self.config_service.get_intents(tenant_id=tenant_id)
+            return {
+                "intents": intents,
+                "rag_top_k": 3,
+                "use_reranker": True
+            }
+        except ValueError:
+            # Fallback to default config
+            return {
+                "intents": [],
+                "rag_top_k": 3,
+                "use_reranker": True
+            }
 
     async def process_chat_request(
         self,
         request: ChatRequest
     ) -> ChatResponse:
         """
-        Process a chat request.
+        Process a chat request using the Orchestrator pattern.
 
-        Runs both IntentAgent and SentimentAgent to classify the user's message
-        and detect emotional tone.
+        This follows the Agent Contract:
+        - Orchestrator coordinates agent execution
+        - Each agent modifies only its assigned fields
+        - Shared state flows between agents
 
         Args:
             request: ChatRequest containing message and metadata
 
         Returns:
-            ChatResponse with detected intent and sentiment
+            ChatResponse with generated response
 
         Raises:
             HTTPException: If processing fails
@@ -253,94 +248,101 @@ class ChatService:
 
         print(f"LLM client created for chatbot_id: {request.chatbot_id}")
 
-        # Create IntentAgent
-        intent_agent = await self.get_intent_agent(
-            llm_client=llm_client,
+        # Create AgentFactory
+        agent_factory = await self._create_agent_factory(llm_client)
+
+        # Create ToolRegistry
+        tool_registry = await self._create_tool_registry()
+
+        # Create all agents
+        agents = {}
+
+        # Create IntentAgent (no tools needed)
+        try:
+            agents["intent"] = await agent_factory.create_intent_agent(
+                tenant_id=request.tenant_id
+            )
+            print(f"IntentAgent initialized")
+        except Exception as e:
+            print(f"Warning: Could not initialize IntentAgent: {str(e)}")
+
+        # Create SentimentAgent (no tools needed)
+        try:
+            agents["sentiment"] = await agent_factory.create_sentiment_agent(
+                tenant_id=request.tenant_id
+            )
+            print(f"SentimentAgent initialized")
+        except Exception as e:
+            print(f"Warning: Could not initialize SentimentAgent: {str(e)}")
+
+        # Create RAGRetrievalAgent (with FAQTool access)
+        try:
+            agents["rag"] = agent_factory.create_rag_agent(tool_registry=tool_registry)
+            print(f"RAGRetrievalAgent initialized")
+        except Exception as e:
+            print(f"Warning: Could not initialize RAGRetrievalAgent: {str(e)}")
+
+        # Create PolicyAgent (with ConfigService for policy loading)
+        try:
+            agents["policy"] = await agent_factory.create_policy_agent(
+                tenant_id=request.tenant_id
+            )
+            print(f"PolicyAgent initialized")
+        except Exception as e:
+            print(f"Warning: Could not initialize PolicyAgent: {str(e)}")
+            # PolicyAgent is optional, so we continue without it
+
+        # Create ResponseAgent (with FAQTool access)
+        try:
+            agents["response"] = agent_factory.create_response_agent(tool_registry=tool_registry)
+            print(f"ResponseAgent initialized")
+        except Exception as e:
+            print(f"Warning: Could not initialize ResponseAgent: {str(e)}")
+
+        # Get orchestrator configuration
+        orchestrator_config = await self._get_orchestrator_config(
             tenant_id=request.tenant_id
         )
 
-        print(f"IntentAgent initialized for tenant_id: {request.tenant_id}")
-
-        # Create SentimentAgent
-        sentiment_agent = await self.get_sentiment_agent(
-            llm_client=llm_client,
-            tenant_id=request.tenant_id
+        # Create Orchestrator
+        orchestrator = Orchestrator(
+            agents=agents,
+            config=orchestrator_config
         )
 
-        print(f"SentimentAgent initialized for tenant_id: {request.tenant_id}")
+        # Process request through orchestrator
+        try:
+            state = await orchestrator.process_request(request)
 
-        # Load available intents
-        available_intents = await self.get_available_intents(
-            tenant_id=request.tenant_id
-        )
+            # Log execution summary
+            summary = orchestrator.get_execution_summary(state)
+            print(f"Execution summary: {summary}")
 
-        print(f"Available intents loaded: {[intent.label for intent in available_intents]}")
+            # Check for errors
+            if state.errors:
+                print(f"Errors during processing: {state.errors}")
 
-        # Run IntentAgent
-        intent_result = await intent_agent.process({
-            "message": request.message,
-            "available_intents": available_intents,
-            "session_id": request.session_id,
-            "tenant_id": request.tenant_id
-        })
+            # Check if we got a response
+            if not state.response:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to generate response"
+                )
 
-        print(f"IntentAgent result: {intent_result}")
-
-        # Check for intent errors
-        if intent_result.data and "error" in intent_result.data:
-            raise HTTPException(
-                status_code=500,
-                detail=intent_result.data["error"]
+            # Return chat response
+            return ChatResponse(
+                response=state.response,
+                tenant_id=request.tenant_id,
+                chatbot_id=request.chatbot_id,
+                session_id=request.session_id
             )
 
-        # Run SentimentAgent
-        sentiment_result = await sentiment_agent.process({
-            "message": request.message,
-            "conversation_history": [],  # TODO: Load from session if available
-            "session_id": request.session_id,
-            "tenant_id": request.tenant_id
-        })
-
-        print(f"SentimentAgent result: {sentiment_result}")
-
-        # Check for sentiment errors
-        if sentiment_result.data and "error" in sentiment_result.data:
+        except Exception as e:
+            print(f"Orchestrator processing failed: {str(e)}")
             raise HTTPException(
                 status_code=500,
-                detail=sentiment_result.data["error"]
+                detail=f"Processing failed: {str(e)}"
             )
-
-        # Build response with both intent and sentiment
-        detected_intent = intent_result.data.get("intent") if intent_result.data else None
-        intent_confidence = intent_result.confidence
-
-        sentiment = sentiment_result.data.get("sentiment") if sentiment_result.data else "neutral"
-        urgency_score = sentiment_result.data.get("urgency_score", 0.0) if sentiment_result.data else 0.0
-        toxicity_flag = sentiment_result.data.get("toxicity_flag", False) if sentiment_result.data else False
-
-        print(f"Detected intent: {detected_intent} (confidence: {intent_confidence:.2f})")
-        print(f"Detected sentiment: {sentiment} (urgency: {urgency_score:.2f}, toxic: {toxicity_flag})")
-
-        # Build response text
-        response_parts = [
-            f"Detected intent: {detected_intent} (confidence: {intent_confidence:.2f})",
-            f"Sentiment: {sentiment} (urgency: {urgency_score:.2f})"
-        ]
-
-        if toxicity_flag:
-            response_parts.append("⚠️ Toxic language detected - consider escalation")
-
-        if urgency_score >= 0.7:
-            response_parts.append("⚠️ High urgency - requires prompt attention")
-
-        response_text = " | ".join(response_parts)
-
-        return ChatResponse(
-            response=response_text,
-            tenant_id=request.tenant_id,
-            chatbot_id=request.chatbot_id,
-            session_id=request.session_id
-        )
 
 
 # Global instance

@@ -2,10 +2,13 @@
 ToolRegistry - Manages available tools and agent permissions.
 
 Controls which agents can access which tools.
+Integrates with BaseTool interface for unified tool management.
 """
 
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel
+from core.BaseTools import BaseTool
+from models.tool import ToolConfig as ToolConfigModel
 
 
 class ToolConfig(BaseModel):
@@ -194,3 +197,57 @@ class ToolRegistry:
         for agent_name in self._permissions:
             if tool_name in self._permissions[agent_name]:
                 self._permissions[agent_name].remove(tool_name)
+
+    def register_base_tool(self, tool: BaseTool) -> None:
+        """
+        Register a BaseTool instance.
+
+        Args:
+            tool: BaseTool instance to register
+        """
+        tool_name = tool.get_name()
+        self._tools[tool_name] = tool
+
+    def register_base_tools(self, tools: List[BaseTool]) -> None:
+        """
+        Register multiple BaseTool instances.
+
+        Args:
+            tools: List of BaseTool instances
+        """
+        for tool in tools:
+            self.register_base_tool(tool)
+
+    def get_tool_info(self, tool_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get information about a tool.
+
+        Args:
+            tool_name: Name of the tool
+
+        Returns:
+            Tool info dict or None if not found
+        """
+        tool = self.get_tool(tool_name)
+        if tool and hasattr(tool, 'get_info'):
+            return tool.get_info()
+        elif tool:
+            return {
+                "name": tool_name,
+                "type": type(tool).__name__,
+                "has_execute": hasattr(tool, 'execute')
+            }
+        return None
+
+    def list_tools_with_info(self) -> List[Dict[str, Any]]:
+        """
+        List all registered tools with their info.
+
+        Returns:
+            List of tool info dicts
+        """
+        return [
+            self.get_tool_info(tool_name)
+            for tool_name in self.list_tools()
+            if self.get_tool_info(tool_name) is not None
+        ]
