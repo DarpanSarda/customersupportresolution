@@ -65,11 +65,12 @@ class Orchestrator:
 
         # Define execution order
         self.execution_order = [
-            "intent",      # First: Understand what user wants
-            "sentiment",   # Second: Understand emotional tone
-            "rag",         # Third: Get relevant context
-            "policy",      # Fourth: Evaluate business rules (optional)
-            "response"     # Last: Generate response
+            "intent",          # First: Understand what user wants
+            "sentiment",       # Second: Understand emotional tone
+            "rag",             # Third: Get relevant context
+            "policy",          # Fourth: Evaluate business rules (optional)
+            "context_builder", # Fifth: Aggregate all outputs into context bundle
+            "response"         # Last: Generate response
         ]
 
         # Filter out missing optional agents
@@ -300,7 +301,9 @@ class Orchestrator:
 
         elif agent_name == "RAGRetrievalAgent":
             # RAGRetrievalAgent ResponsePatch -> ConversationState
-            state.rag_results = data.get("relevant_passages", [])
+            relevant_passages = data.get("relevant_passages", [])
+            print(f"[DEBUG] RAGRetrievalAgent: storing {len(relevant_passages)} passages")
+            state.rag_results = relevant_passages
             # If we have direct answer (FAQ), use it; otherwise join passages
             source_type = data.get("source_type")
             state.rag_source_type = source_type
@@ -500,4 +503,18 @@ class AgentFactory:
         )
 
         print(f"[DEBUG] PolicyAgent created, has config_service={agent.config_service is not None}")
+        return agent
+
+    def create_context_builder_agent(self, enable_optimization: bool = False):
+        """Create ContextBuilderAgent."""
+        from agents.ContextBuilderAgent import ContextBuilderAgent
+
+        print(f"[DEBUG] create_context_builder_agent called with enable_optimization={enable_optimization}")
+
+        agent = ContextBuilderAgent(
+            llm_client=self.llm_client,
+            enable_optimization=enable_optimization
+        )
+
+        print(f"[DEBUG] ContextBuilderAgent created")
         return agent

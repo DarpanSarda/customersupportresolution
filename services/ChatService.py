@@ -150,6 +150,7 @@ class ChatService:
         from core.ToolRegistry import ToolRegistry
         from tools.FAQTool import FAQTool
         from tools.ApiTool import ApiTool
+        from tools.WebSearchTool import WebSearchTool
         from models.tool import ToolConfig as ToolConfigModel
 
         # Create tool registry
@@ -174,13 +175,19 @@ class ChatService:
         registry.register_base_tool(api_tool)
         print(f"[DEBUG] Registered tool: ApiTool with name={api_tool.get_name()}")
 
+        # Register WebSearchTool
+        web_search_tool = WebSearchTool()
+        print(f"[DEBUG] Creating WebSearchTool, name={web_search_tool.get_name()}")
+        registry.register_base_tool(web_search_tool)
+        print(f"[DEBUG] Registered tool: WebSearchTool with name={web_search_tool.get_name()}")
+
         # Set up agent permissions
-        # ResponseAgent can use FAQTool
-        registry.set_agent_permissions("ResponseAgent", ["FAQTool"])
+        # ResponseAgent can use FAQTool and WebSearchTool
+        registry.set_agent_permissions("ResponseAgent", ["FAQTool", "WebSearchTool"])
         print(f"[DEBUG] Set permissions for ResponseAgent: {registry.get_agent_tools('ResponseAgent')}")
 
-        # RAGRetrievalAgent can use FAQTool
-        registry.set_agent_permissions("RAGRetrievalAgent", ["FAQTool"])
+        # RAGRetrievalAgent can use FAQTool and WebSearchTool
+        registry.set_agent_permissions("RAGRetrievalAgent", ["FAQTool", "WebSearchTool"])
         print(f"[DEBUG] Set permissions for RAGRetrievalAgent: {registry.get_agent_tools('RAGRetrievalAgent')}")
 
         print(f"[DEBUG] Tool registry created with {len(registry.list_tools())} tools")
@@ -241,6 +248,21 @@ class ChatService:
                 detail="chatbot_id is required"
             )
 
+        # Fast greeting detection (before expensive LLM/agent initialization)
+        from agents.GreetingDetector import get_greeting_detector
+
+        greeting_detector = get_greeting_detector()
+        greeting_result = greeting_detector.detect_and_respond(request.message)
+
+        if greeting_result and greeting_result.get("skip_pipeline"):
+            print(f"Greeting detected (confidence: {greeting_result['confidence']:.2f}), skipping full pipeline")
+            return ChatResponse(
+                response=greeting_result["response"],
+                tenant_id=request.tenant_id,
+                chatbot_id=request.chatbot_id,
+                session_id=request.session_id
+            )
+
         # Create LLM client
         llm_client = await self.get_llm_client(
             chatbot_id=request.chatbot_id
@@ -291,6 +313,16 @@ class ChatService:
         except Exception as e:
             print(f"Warning: Could not initialize PolicyAgent: {str(e)}")
             # PolicyAgent is optional, so we continue without it
+
+        # Create ContextBuilderAgent (aggregates all previous outputs)
+        try:
+            agents["context_builder"] = agent_factory.create_context_builder_agent(
+                enable_optimization=False
+            )
+            print(f"ContextBuilderAgent initialized")
+        except Exception as e:
+            print(f"Warning: Could not initialize ContextBuilderAgent: {str(e)}")
+            # ContextBuilderAgent is optional, so we continue without it
 
         # Create ResponseAgent (with FAQTool access)
         try:

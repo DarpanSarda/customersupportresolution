@@ -149,6 +149,55 @@ PolicyAgent(llm_client=llm, system_prompt=prompt, config_service=config_service)
 
 ---
 
+### 6. ContextBuilderAgent ✅ COMPLETE
+**File**: `agents/ContextBuilderAgent.py`
+
+**Purpose**: Aggregate all previous agent outputs into structured context bundle
+
+**Tool Requirements**: None
+- Pure aggregator/transformer agent
+- No external tools needed
+- Optionally uses LLM for context optimization
+
+**Tool Registry**: Not used
+
+```python
+ContextBuilderAgent(llm_client=llm, enable_optimization=False)
+```
+
+**State Updates**:
+- `context_bundle`: Structured context object containing:
+  - `user_query`: Original message, entities, intent, confidence
+  - `user_context`: Sentiment, urgency, toxicity, profile
+  - `knowledge`: Retrieved passages, source IDs, relevance scores
+  - `policy`: Allowed/denied actions, conditions, reasoning
+  - `conversation`: History, turn count, optional summary
+  - `metadata`: Session info, timestamps, execution order
+  - `tenant_id`: Tenant identifier
+  - `timestamp`: ISO timestamp of creation
+
+**Position in Pipeline**:
+```
+Intent → Sentiment → RAG → Policy → ContextBuilder → Resolution → Escalation
+```
+
+**Features**:
+- Three-phase processing (collection, structuring, optimization)
+- Graceful handling of missing data
+- Long conversation summarization (>10 turns)
+- Tenant-specific context transformations
+- Pydantic models for validation
+
+**Implementation Details**:
+- Handles both dict and list formats for rag_results
+- Preserves entities from existing context_bundle
+- Creates conversation summary for long conversations
+- Returns StateUpdate with context_bundle field
+
+**Tests**: `tests/test_context_builder_agent.py` with 20+ test cases
+
+---
+
 ## Tool Registry Configuration
 
 ### Registered Tools
@@ -157,13 +206,14 @@ PolicyAgent(llm_client=llm, system_prompt=prompt, config_service=config_service)
 |-----------|------------|---------|
 | FAQTool | tools.FAQTool.FAQTool | FAQ lookup from Qdrant vector store |
 | ApiTool | tools.ApiTool.ApiTool | Generic HTTP API caller with retry logic |
+| WebSearchTool | tools.WebSearchTool.WebSearchTool | Web search using Tavily and Serper APIs |
 
 ### Agent Permissions
 
 | Agent | Allowed Tools | Usage |
 |-------|---------------|-------|
-| RAGRetrievalAgent | FAQTool | ✅ Active - Uses FAQTool for FAQ lookups |
-| ResponseAgent | FAQTool | ⚸ Configured but not used (reads from state) |
+| RAGRetrievalAgent | FAQTool, WebSearchTool | ✅ Active - Uses FAQTool for FAQ lookups, WebSearchTool as fallback |
+| ResponseAgent | FAQTool, WebSearchTool | ⚸ Configured but not used (reads from state) |
 
 ### Permission Setup
 
@@ -254,16 +304,19 @@ All components have comprehensive debug logging:
 ```
 customersupportresolution/
 ├── agents/
-│   ├── BaseAgent.py              # Base class for all agents
+│   ├── BaseAgent.py              # Base class for all agents (in core/)
 │   ├── IntentAgent.py            # Intent classification
 │   ├── SentimentAgent.py         # Sentiment analysis
 │   ├── RAGRetrievalAgent.py      # RAG retrieval (uses FAQTool)
 │   ├── PolicyAgent.py            # Policy evaluation (uses ConfigService)
-│   └── ResponseAgent.py          # Response generation
+│   ├── ResponseAgent.py          # Response generation
+│   ├── GreetingDetector.py       # Fast greeting detection (pre-pipeline)
+│   └── ContextBuilderAgent.py    # Context aggregation ✅
 ├── tools/
 │   ├── BaseTools.py              # Base class for all tools
 │   ├── FAQTool.py                # FAQ lookup tool
 │   ├── ApiTool.py                # HTTP API caller tool
+│   ├── WebSearchTool.py          # Web search (Tavily + Serper)
 │   └── __init__.py
 ├── core/
 │   ├── ToolRegistry.py           # Tool and permission management
@@ -275,6 +328,10 @@ customersupportresolution/
 ├── prompts/
 │   ├── PolicyAgent/
 │   │   └── v1.txt                # PolicyAgent prompt template
+│   └── ...
+├── docs/
+│   ├── CONTEXT_BUILDER_AGENT_IMPLEMENTATION_PLAN.md  # ContextBuilderAgent plan
+│   ├── AGENT_INTEGRATION_STATUS.md  # This file
 │   └── ...
 └── services/
     └── ChatService.py            # Main service with tool registry creation
@@ -292,7 +349,10 @@ customersupportresolution/
 - [x] ToolRegistry - Manages tools and permissions
 - [x] FAQTool - Registered and functional
 - [x] ApiTool - Registered and functional
+- [x] WebSearchTool - Registered and functional
 - [x] Agent permissions - Configured correctly
+- [x] GreetingDetector - Integrated in ChatService
+- [x] ContextBuilderAgent - ✅ Complete (agents/, prompts/, tests/, orchestrator, chat service)
 - [ ] Policies table created in database
 - [ ] Default policies inserted
 - [ ] End-to-end test with FAQ data
