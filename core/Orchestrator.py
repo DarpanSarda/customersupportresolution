@@ -69,7 +69,9 @@ class Orchestrator:
             "sentiment",       # Second: Understand emotional tone
             "rag",             # Third: Get relevant context
             "policy",          # Fourth: Evaluate business rules (optional)
-            "context_builder", # Fifth: Aggregate all outputs into context bundle
+            "escalation",      # Fifth: Determine if escalation needed (optional)
+            "ticket_action",   # Sixth: Execute business actions (optional)
+            "context_builder", # Seventh: Aggregate all outputs into context bundle
             "response"         # Last: Generate response
         ]
 
@@ -245,6 +247,16 @@ class Orchestrator:
             base_input["intent"] = state.intent
             base_input["sentiment"] = state.sentiment
 
+        elif agent_name == "escalation":
+            # EscalationAgent works with full state
+            # (already passed in base_input)
+            pass
+
+        elif agent_name == "ticket_action":
+            # TicketActionAgent works with full state
+            # (already passed in base_input)
+            pass
+
         elif agent_name == "response":
             # ResponseAgent works with full state
             # (already passed in base_input)
@@ -327,6 +339,22 @@ class Orchestrator:
             state.policy_results = data.get("policy_results", {})
             state.policy_action = data.get("policy_action")
             state.policy_raw = data.get("policy_raw", {})
+
+        elif agent_name == "EscalationAgent":
+            # EscalationAgent StateUpdate -> ConversationState
+            state.escalation_triggered = data.get("escalation_triggered", False)
+            state.escalation_channel = data.get("escalation_channel")
+            state.escalation_details = data.get("escalation_details", {})
+            state.escalation_raw = data.get("escalation_raw", {})
+
+        elif agent_name == "TicketActionAgent":
+            # TicketActionAgent StateUpdate -> ConversationState
+            state.action_executed = data.get("action_executed", False)
+            state.action_type = data.get("action_type")
+            state.action_id = data.get("action_id")
+            state.action_status = data.get("action_status")
+            state.action_details = data.get("action_details", {})
+            state.action_raw = data.get("action_raw", {})
 
         elif agent_name == "ResponseAgent":
             # ResponseAgent should return StateUpdate, but handle ResponsePatch for compatibility
@@ -517,4 +545,51 @@ class AgentFactory:
         )
 
         print(f"[DEBUG] ContextBuilderAgent created")
+        return agent
+
+    async def create_escalation_agent(
+        self,
+        tenant_id: str = "default",
+        auto_escalate: bool = False
+    ):
+        """Create EscalationAgent."""
+        from agents.EscalationAgent import EscalationAgent
+
+        prompt = await self.config_service.get_prompt(
+            agent_name="EscalationAgent",
+            version="v1",
+            tenant_id=tenant_id
+        )
+
+        print(f"[DEBUG] create_escalation_agent called with tenant_id={tenant_id}, auto_escalate={auto_escalate}")
+
+        agent = EscalationAgent(
+            llm_client=self.llm_client,
+            system_prompt=prompt,
+            config_service=self.config_service,
+            auto_escalate=auto_escalate
+        )
+
+        print(f"[DEBUG] EscalationAgent created, has config_service={agent.config_service is not None}")
+        return agent
+
+    def create_ticket_action_agent(
+        self,
+        db_manager=None,
+        auto_execute: bool = False
+    ):
+        """Create TicketActionAgent."""
+        from agents.TicketActionAgent import TicketActionAgent
+
+        print(f"[DEBUG] create_ticket_action_agent called with auto_execute={auto_execute}")
+
+        agent = TicketActionAgent(
+            llm_client=self.llm_client,
+            system_prompt="You are a Ticket Action Agent. Execute business actions based on policy decisions.",
+            config_service=self.config_service,
+            db_manager=db_manager,
+            auto_execute=auto_execute
+        )
+
+        print(f"[DEBUG] TicketActionAgent created, auto_execute={auto_execute}")
         return agent

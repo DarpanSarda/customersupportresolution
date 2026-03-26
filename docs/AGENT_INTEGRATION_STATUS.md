@@ -198,6 +198,72 @@ Intent → Sentiment → RAG → Policy → ContextBuilder → Resolution → Es
 
 ---
 
+### 7. EscalationAgent ✅ COMPLETE
+**File**: `agents/EscalationAgent.py`
+
+**Purpose**: Determines when and how to escalate conversations to human agents
+
+**Tool Requirements**: Optional (for escalation execution)
+- TicketCreationTool for support tickets
+- EmailTool for email escalations
+- SlackTool for Slack notifications
+- WebhookTool for custom webhooks
+
+**Tool Registry**: Optional (used when auto_escalate=True)
+```python
+EscalationAgent(llm_client=llm, config_service=config_service, auto_escalate=False)
+```
+
+**State Updates**:
+- `escalation_triggered`: Whether escalation was triggered
+- `escalation_channel`: Channel used (ticket_system, email, slack, webhook, none)
+- `escalation_details`: Full escalation details (reason, priority, recipient, triggers, etc.)
+- `escalation_raw`: Raw escalation data for debugging
+
+**Position in Pipeline**:
+```
+Intent → Sentiment → RAG → Policy → Escalation → ContextBuilder → Response
+```
+
+**Features**:
+- Multi-trigger escalation detection (sentiment, toxicity, urgency, policy)
+- Priority calculation (LOW, MEDIUM, HIGH, CRITICAL)
+- Automatic channel selection based on priority
+- Integration with PolicyAgent for policy-based escalation
+- Configurable auto-escalation via tools
+- Tenant-specific escalation rules via ConfigService
+
+**Escalation Triggers**:
+- **Critical**: toxicity_flag=True, urgency>0.9, angry+confidence>0.8
+- **High**: angry sentiment, frustrated+confidence>0.6, policy threshold exceeded
+- **Medium**: policy blocked sentiment
+- **Low**: default (no escalation)
+
+**Channel Mapping** (default):
+- CRITICAL → Slack (immediate notification)
+- HIGH → Ticket System
+- MEDIUM → Ticket System
+- LOW → None (no escalation)
+
+**State Dependencies**:
+- `sentiment`: Detected sentiment from SentimentAgent
+- `sentiment_confidence`: Sentiment confidence/urgency score
+- `sentiment_raw`: Raw sentiment data including toxicity_flag
+- `policy_results`: Policy evaluation results
+- `policy_action`: Recommended business action from PolicyAgent
+- `intent`: Detected intent for context
+
+**Implementation Details**:
+- Returns StateUpdate with escalation fields
+- Graceful handling of missing sentiment/policy data
+- Supports both ConversationState and dict input formats
+- Auto-escalation execution via tools (when enabled)
+- Comprehensive debugging data in escalation_raw
+
+**Tests**: `tests/test_escalation_agent.py` with 30+ test cases
+
+---
+
 ## Tool Registry Configuration
 
 ### Registered Tools
@@ -309,6 +375,7 @@ customersupportresolution/
 │   ├── SentimentAgent.py         # Sentiment analysis
 │   ├── RAGRetrievalAgent.py      # RAG retrieval (uses FAQTool)
 │   ├── PolicyAgent.py            # Policy evaluation (uses ConfigService)
+│   ├── EscalationAgent.py        # Escalation decision ✅
 │   ├── ResponseAgent.py          # Response generation
 │   ├── GreetingDetector.py       # Fast greeting detection (pre-pipeline)
 │   └── ContextBuilderAgent.py    # Context aggregation ✅
@@ -328,6 +395,8 @@ customersupportresolution/
 ├── prompts/
 │   ├── PolicyAgent/
 │   │   └── v1.txt                # PolicyAgent prompt template
+│   ├── EscalationAgent/
+│   │   └── v1.txt                # EscalationAgent prompt template ✅
 │   └── ...
 ├── docs/
 │   ├── CONTEXT_BUILDER_AGENT_IMPLEMENTATION_PLAN.md  # ContextBuilderAgent plan
@@ -345,7 +414,9 @@ customersupportresolution/
 - [x] SentimentAgent - Working, no tools needed
 - [x] RAGRetrievalAgent - Working with FAQTool integration
 - [x] PolicyAgent - Working with ConfigService integration
+- [x] EscalationAgent - ✅ Complete (escalation decision, priority calculation, channel selection)
 - [x] ResponseAgent - Working, reads from state
+- [x] ContextBuilderAgent - ✅ Complete (agents/, prompts/, tests/, orchestrator, chat service)
 - [x] ToolRegistry - Manages tools and permissions
 - [x] FAQTool - Registered and functional
 - [x] ApiTool - Registered and functional

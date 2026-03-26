@@ -131,8 +131,13 @@ class SentimentAgent(BaseAgent):
             **kwargs
         )
 
+        # Debug: Log raw LLM response
+        print(f"[DEBUG] SentimentAgent LLM raw response: {response.content}")
+
         # Parse the response
-        return self._parse_sentiment_response(response.content)
+        parsed = self._parse_sentiment_response(response.content)
+        print(f"[DEBUG] SentimentAgent parsed result: sentiment={parsed['sentiment']}, urgency={parsed['urgency_score']}, confidence={parsed.get('confidence', 0.0)}")
+        return parsed
 
     def _build_context(self, message: str, conversation_history: list = None) -> str:
         """

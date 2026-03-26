@@ -20,6 +20,9 @@ class ConversationState:
     - SentimentAgent: sentiment, sentiment_confidence
     - RAGRetrievalAgent: rag_results, rag_context, rag_confidence
     - PolicyAgent: policy_results, policy_action
+    - ContextBuilderAgent: context_bundle
+    - EscalationAgent: escalation_triggered, escalation_channel, escalation_details
+    - TicketActionAgent: action_executed, action_type, action_id, action_status, action_details
     - ResponseAgent: response, response_type
 
     Agents must NEVER modify fields owned by other agents.
@@ -96,6 +99,38 @@ class ConversationState:
     response_type: Optional[str] = None
     """Type of response: 'faq_answer', 'kb_answer', 'generic', etc."""
 
+    # EscalationAgent output
+    escalation_triggered: bool = False
+    """Whether escalation was triggered"""
+
+    escalation_channel: Optional[str] = None
+    """Escalation channel used: 'ticket_system', 'email', 'slack', 'webhook', etc."""
+
+    escalation_details: Dict[str, Any] = field(default_factory=dict)
+    """Escalation details including reason, priority, recipient, etc."""
+
+    escalation_raw: Optional[Dict[str, Any]] = None
+    """Raw escalation agent output for debugging"""
+
+    # TicketActionAgent output
+    action_executed: bool = False
+    """Whether a business action was executed"""
+
+    action_type: Optional[str] = None
+    """Type of action executed (CREATE_TICKET, PROCESS_REFUND, SEND_EMAIL, etc.)"""
+
+    action_id: Optional[str] = None
+    """Unique ID for the executed action"""
+
+    action_status: Optional[str] = None
+    """Status of action execution: pending, completed, failed, blocked, not_allowed"""
+
+    action_details: Dict[str, Any] = field(default_factory=dict)
+    """Action execution details including result data, timestamps, etc."""
+
+    action_raw: Optional[Dict[str, Any]] = None
+    """Raw action agent output for debugging"""
+
     # ============ Shared Context Fields ============
     # These fields can be read/written by multiple agents
 
@@ -169,6 +204,14 @@ class ConversationState:
             "policy_action": self.policy_action,
             "response": self.response,
             "response_type": self.response_type,
+            "escalation_triggered": self.escalation_triggered,
+            "escalation_channel": self.escalation_channel,
+            "escalation_details": self.escalation_details,
+            "action_executed": self.action_executed,
+            "action_type": self.action_type,
+            "action_id": self.action_id,
+            "action_status": self.action_status,
+            "action_details": self.action_details,
             "conversation_history": self.conversation_history,
             "context_bundle": self.context_bundle,
             "errors": self.errors,

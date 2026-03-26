@@ -314,6 +314,28 @@ class ChatService:
             print(f"Warning: Could not initialize PolicyAgent: {str(e)}")
             # PolicyAgent is optional, so we continue without it
 
+        # Create EscalationAgent (with tool registry for escalation channels)
+        try:
+            agents["escalation"] = await agent_factory.create_escalation_agent(
+                tenant_id=request.tenant_id,
+                auto_escalate=False  # Set to True to enable automatic escalation execution
+            )
+            print(f"EscalationAgent initialized")
+        except Exception as e:
+            print(f"Warning: Could not initialize EscalationAgent: {str(e)}")
+            # EscalationAgent is optional, so we continue without it
+
+        # Create TicketActionAgent (executes business actions)
+        try:
+            agents["ticket_action"] = agent_factory.create_ticket_action_agent(
+                db_manager=self.db,
+                auto_execute=True  # Set to True to enable automatic action execution
+            )
+            print(f"TicketActionAgent initialized")
+        except Exception as e:
+            print(f"Warning: Could not initialize TicketActionAgent: {str(e)}")
+            # TicketActionAgent is optional, so we continue without it
+
         # Create ContextBuilderAgent (aggregates all previous outputs)
         try:
             agents["context_builder"] = agent_factory.create_context_builder_agent(
